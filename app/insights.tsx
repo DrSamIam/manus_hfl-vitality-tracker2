@@ -8,6 +8,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AchievementsGrid, calculateAchievements } from "@/components/achievements";
+import { CorrelationAnalysis } from "@/components/correlation-analysis";
+import { WeeklySummary } from "@/components/weekly-summary";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
@@ -29,24 +32,21 @@ export default function InsightsScreen() {
   );
   const { data: symptoms } = trpc.symptoms.list.useQuery({ limit: 30 }, { enabled: isAuthenticated });
   const { data: biomarkers } = trpc.biomarkers.list.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: supplements } = trpc.supplements.list.useQuery({}, { enabled: isAuthenticated });
+  const { data: cycles } = trpc.cycles.list.useQuery(undefined, { enabled: isAuthenticated && profile?.biologicalSex === "female" });
 
-  // Calculate some basic insights from the data
-  const calculateAverages = () => {
-    if (!symptoms || symptoms.length === 0) return null;
-    
-    const last7Days = symptoms.slice(0, 7);
-    const avgEnergy = last7Days.reduce((sum, s) => sum + (s.energy || 0), 0) / last7Days.length;
-    const avgMood = last7Days.reduce((sum, s) => sum + (s.mood || 0), 0) / last7Days.length;
-    const avgSleep = last7Days.reduce((sum, s) => sum + (s.sleep || 0), 0) / last7Days.length;
-    
-    return {
-      energy: avgEnergy.toFixed(1),
-      mood: avgMood.toFixed(1),
-      sleep: avgSleep.toFixed(1),
-    };
-  };
-
-  const averages = calculateAverages();
+  // Calculate achievements
+  const achievements = calculateAchievements({
+    streak: 0, // Would calculate from symptoms
+    biomarkersCount: biomarkers?.length || 0,
+    uniqueBiomarkers: new Set(biomarkers?.map((b) => b.markerName)).size || 0,
+    supplementsCount: supplements?.length || 0,
+    perfectAdherenceDays: 0, // Would need to calculate from logs
+    cyclesTracked: cycles?.length || 0,
+    profileComplete: !!profile?.biologicalSex && !!profile?.age,
+    hasViewedInsights: true,
+    hasExportedData: false,
+  });
 
   // Generate pattern insights based on data
   const generatePatternInsights = () => {
@@ -92,6 +92,32 @@ export default function InsightsScreen() {
     );
   }
 
+  // Format symptoms for components
+  const formattedSymptoms = (symptoms || []).map((s) => ({
+    logDate: s.logDate as unknown as string,
+    energy: s.energy,
+    mood: s.mood,
+    sleep: s.sleep,
+    mentalClarity: s.mentalClarity,
+    libido: s.libido,
+    performanceStamina: s.performanceStamina,
+  }));
+
+  // Format supplements for correlation analysis
+  const formattedSupplements = (supplements || []).map((s) => ({
+    id: s.id,
+    name: s.name,
+    startDate: s.startDate as unknown as string,
+  }));
+
+  const formattedSupplementLogs: Array<{
+    supplementId: number;
+    supplementName: string;
+    logDate: string;
+    amTaken: boolean;
+    pmTaken: boolean;
+  }> = [];
+
   return (
     <ThemedView style={styles.container}>
       <ScrollView
@@ -116,42 +142,19 @@ export default function InsightsScreen() {
           </ThemedText>
         </View>
 
-        {/* 7-Day Averages */}
-        {averages && (
-          <View style={[styles.card, { backgroundColor: colors.surface }]}>
-            <ThemedText type="subtitle" style={styles.cardTitle}>
-              7-Day Averages
-            </ThemedText>
-            <View style={styles.averagesGrid}>
-              <View style={styles.averageItem}>
-                <ThemedText style={{ fontSize: 32 }}>⚡</ThemedText>
-                <ThemedText type="title" style={{ color: colors.tint }}>
-                  {averages.energy}
-                </ThemedText>
-                <ThemedText style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  Energy
-                </ThemedText>
-              </View>
-              <View style={styles.averageItem}>
-                <ThemedText style={{ fontSize: 32 }}>😊</ThemedText>
-                <ThemedText type="title" style={{ color: colors.tint }}>
-                  {averages.mood}
-                </ThemedText>
-                <ThemedText style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  Mood
-                </ThemedText>
-              </View>
-              <View style={styles.averageItem}>
-                <ThemedText style={{ fontSize: 32 }}>😴</ThemedText>
-                <ThemedText type="title" style={{ color: colors.tint }}>
-                  {averages.sleep}
-                </ThemedText>
-                <ThemedText style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  Sleep
-                </ThemedText>
-              </View>
-            </View>
-          </View>
+        {/* Weekly Summary */}
+        <WeeklySummary symptoms={formattedSymptoms} />
+
+        {/* Achievements */}
+        <AchievementsGrid achievements={achievements} showLocked={true} />
+
+        {/* Supplement Correlation Analysis */}
+        {supplements && supplements.length > 0 && (
+          <CorrelationAnalysis
+            symptoms={formattedSymptoms}
+            supplements={formattedSupplements}
+            supplementLogs={formattedSupplementLogs}
+          />
         )}
 
         {/* Pattern Insights */}
@@ -267,10 +270,6 @@ const styles = StyleSheet.create({
   header: { marginBottom: 24 },
   backButton: { marginBottom: 16 },
   subtitle: { fontSize: 16, marginTop: 4 },
-  card: { padding: 20, borderRadius: 16, marginBottom: 24 },
-  cardTitle: { marginBottom: 16 },
-  averagesGrid: { flexDirection: "row", justifyContent: "space-around" },
-  averageItem: { alignItems: "center" },
   section: { marginBottom: 24 },
   sectionTitle: { marginBottom: 16 },
   patternCard: { padding: 16, borderRadius: 12, marginBottom: 12, borderLeftWidth: 4 },

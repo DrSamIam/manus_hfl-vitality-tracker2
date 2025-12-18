@@ -122,3 +122,30 @@
 - [ ] Add push notification scheduling
 - [ ] Add reference ranges for biomarkers
 - [ ] Add premium features section
+
+## Phase 2 Enhancements
+
+### Data Visualization & Analytics
+- [x] Add line charts for biomarker trends using SVG
+- [x] Implement color-coded reference ranges (optimal, borderline, concerning)
+- [x] Add correlation analysis showing supplement impact on symptoms
+- [x] Create weekly summary view
+
+### Cycle Tracking Enhancements (Female)
+- [x] Implement period prediction algorithm based on historical data
+- [x] Add fertile window and ovulation estimates
+- [x] Show cycle phase overlays (cycle wheel component)
+
+### User Experience Improvements
+- [ ] Add quick-log functionality from dashboard
+- [ ] Implement smart reminder suggestions
+- [ ] Add calendar view for symptom history
+
+### Engagement Features
+- [x] Add achievement badges for streaks and milestones
+- [x] Create educational content for each biomarker
+- [x] Add optimal ranges and improvement tips
+
+### Technical Enhancements
+- [x] Implement offline support with AsyncStorage caching
+- [x] Add data sync queue for offline changes
