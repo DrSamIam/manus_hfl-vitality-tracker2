@@ -1,4 +1,6 @@
 import { useState } from "react";
+
+import { SymptomCalendar } from "@/components/symptom-calendar";
 import {
   ActivityIndicator,
   Pressable,
@@ -56,6 +58,15 @@ export default function SymptomsScreen() {
   const { data: cycleDay } = trpc.cycles.currentDay.useQuery(undefined, {
     enabled: isAuthenticated && !!profile?.cycleTrackingEnabled,
   });
+  const { data: allSymptoms } = trpc.symptoms.list.useQuery(
+    { limit: 90 },
+    { enabled: isAuthenticated }
+  );
+  const { data: cycles } = trpc.cycles.list.useQuery(undefined, {
+    enabled: isAuthenticated && !!profile?.cycleTrackingEnabled,
+  });
+
+  const [showCalendar, setShowCalendar] = useState(false);
 
   const createSymptom = trpc.symptoms.create.useMutation({
     onSuccess: () => refetch(),
@@ -124,6 +135,39 @@ export default function SymptomsScreen() {
               Daily Symptom Journal
             </ThemedText>
           </View>
+
+          {/* Calendar Toggle */}
+          <Pressable
+            onPress={() => setShowCalendar(!showCalendar)}
+            style={[styles.calendarToggle, { backgroundColor: colors.surface }]}
+          >
+            <ThemedText style={{ fontSize: 20 }}>📅</ThemedText>
+            <ThemedText type="defaultSemiBold">
+              {showCalendar ? "Hide Calendar" : "View Calendar"}
+            </ThemedText>
+          </Pressable>
+
+          {/* Calendar View */}
+          {showCalendar && allSymptoms && (
+            <SymptomCalendar
+              symptoms={allSymptoms.map((s) => ({
+                id: s.id,
+                logDate: s.logDate as unknown as string,
+                energy: s.energy,
+                mood: s.mood,
+                sleep: s.sleep,
+                mentalClarity: s.mentalClarity,
+                libido: s.libido,
+                performanceStamina: s.performanceStamina,
+                notes: s.notes,
+              }))}
+              cycles={cycles?.map((c) => ({
+                startDate: c.cycleStartDate as unknown as string,
+                endDate: c.cycleEndDate as unknown as string | undefined,
+              }))}
+              cycleTrackingEnabled={showCycleTracking ?? false}
+            />
+          )}
 
           <View style={[styles.completedCard, { backgroundColor: colors.surface }]}>
             <ThemedText style={{ fontSize: 48, marginBottom: 16 }}>✅</ThemedText>
@@ -500,4 +544,5 @@ const styles = StyleSheet.create({
   summaryCard: { padding: 20, borderRadius: 12 },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 8 },
   notesSection: { marginTop: 16, paddingTop: 16, borderTopWidth: 1 },
+  calendarToggle: { flexDirection: "row", alignItems: "center", gap: 8, padding: 16, borderRadius: 12, marginBottom: 16 },
 });

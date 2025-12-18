@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { HealthReportGenerator } from "@/components/health-report";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
@@ -34,6 +35,7 @@ export default function ProfileScreen() {
   const { data: streak } = trpc.symptoms.streak.useQuery(undefined, { enabled: isAuthenticated });
   const { data: biomarkers } = trpc.biomarkers.list.useQuery(undefined, { enabled: isAuthenticated });
   const { data: symptoms } = trpc.symptoms.list.useQuery({ limit: 100 }, { enabled: isAuthenticated });
+  const { data: supplements } = trpc.supplements.list.useQuery({}, { enabled: isAuthenticated });
 
   const updateProfile = trpc.profile.update.useMutation({
     onSuccess: () => refetchProfile(),
@@ -308,23 +310,44 @@ export default function ProfileScreen() {
           )}
         </View>
 
+        {/* Health Report Section */}
+        <View style={styles.section}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
+            Health Report
+          </ThemedText>
+          <HealthReportGenerator
+            userName={user?.name || "User"}
+            biologicalSex={profile.biologicalSex || ""}
+            age={profile.age}
+            symptoms={(symptoms || []).map((s) => ({
+              logDate: s.logDate as unknown as string,
+              energy: s.energy,
+              mood: s.mood,
+              sleep: s.sleep,
+              mentalClarity: s.mentalClarity,
+              libido: s.libido,
+              performanceStamina: s.performanceStamina,
+            }))}
+            biomarkers={(biomarkers || []).map((b) => ({
+              markerName: b.markerName,
+              value: b.value,
+              unit: b.unit,
+              testDate: b.testDate as unknown as string,
+            }))}
+            supplements={(supplements || []).map((s) => ({
+              name: s.name,
+              dosage: s.dosage,
+              timing: s.timing,
+              active: s.active,
+            }))}
+          />
+        </View>
+
         {/* Data Section */}
         <View style={styles.section}>
           <ThemedText type="subtitle" style={styles.sectionTitle}>
             Data & Privacy
           </ThemedText>
-
-          <Pressable
-            onPress={handleExportData}
-            style={({ pressed }) => [
-              styles.actionButton,
-              { backgroundColor: colors.surface },
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <ThemedText type="defaultSemiBold">Export My Data</ThemedText>
-            <ThemedText style={{ color: colors.textSecondary }}>→</ThemedText>
-          </Pressable>
 
           <Pressable
             onPress={handleDeleteAccount}

@@ -116,7 +116,7 @@
 
 ## Future Enhancements
 - [ ] Add charts for biomarker trends (Victory Native)
-- [ ] Add calendar view for symptom history
+- [x] Add calendar view for symptom history
 - [ ] Add PDF export for health reports
 - [ ] Add lab PDF upload functionality
 - [ ] Add push notification scheduling
@@ -139,7 +139,7 @@
 ### User Experience Improvements
 - [ ] Add quick-log functionality from dashboard
 - [ ] Implement smart reminder suggestions
-- [ ] Add calendar view for symptom history
+- [x] Add calendar view for symptom history
 
 ### Engagement Features
 - [x] Add achievement badges for streaks and milestones
@@ -149,3 +149,26 @@
 ### Technical Enhancements
 - [x] Implement offline support with AsyncStorage caching
 - [x] Add data sync queue for offline changes
+
+## Phase 3 Features
+
+### Calendar View
+- [x] Create calendar component with month navigation
+- [x] Show logged days with color indicators
+- [x] Add cycle phase color coding for females
+- [x] Implement day tap to view details
+- [x] Integrate calendar into symptoms screen
+
+### Push Notifications
+- [x] Set up Expo Notifications
+- [x] Implement daily symptom reminder scheduling
+- [x] Add supplement reminder notifications
+- [x] Create notification settings UI
+- [x] Handle notification permissions
+
+### Health Report Export
+- [x] Create health report template
+- [x] Generate text report with symptom summaries
+- [x] Include biomarker data in report
+- [x] Add supplement protocol data
+- [x] Implement share functionality via native share sheet
