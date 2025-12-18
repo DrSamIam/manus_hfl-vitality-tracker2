@@ -17,10 +17,9 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
         headerShown: false,
         tabBarButton: HapticTab,
-        // Ensure tab bar respects bottom safe area for devices with home indicators
         tabBarStyle: {
           paddingBottom: insets.bottom,
-          height: 49 + insets.bottom, // Default tab bar height (49) + safe area
+          height: 49 + insets.bottom,
         },
       }}
     >
@@ -29,6 +28,34 @@ export default function TabLayout() {
         options={{
           title: "Home",
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="biomarkers"
+        options={{
+          title: "Biomarkers",
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="symptoms"
+        options={{
+          title: "Symptoms",
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="heart.text.square.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="supplements"
+        options={{
+          title: "Supplements",
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="pills.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profile",
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
         }}
       />
     </Tabs>

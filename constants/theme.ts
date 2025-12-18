@@ -5,25 +5,51 @@
 
 import { Platform } from "react-native";
 
-const tintColorLight = "#0a7ea4";
-const tintColorDark = "#fff";
+const tintColorLight = "#0D7C8C"; // Deep teal
+const tintColorDark = "#00C9D7"; // Vibrant cyan
 
 export const Colors = {
   light: {
     text: "#11181C",
-    background: "#fff",
+    textSecondary: "#687076",
+    background: "#FFFFFF",
+    surface: "#F8F9FA",
     tint: tintColorLight,
+    accent: "#00C9D7", // Vibrant cyan
+    accentSecondary: "#FF6B6B", // Coral
     icon: "#687076",
     tabIconDefault: "#687076",
     tabIconSelected: tintColorLight,
+    border: "#E5E7EB",
+    success: "#10B981",
+    warning: "#F59E0B",
+    error: "#EF4444",
+    // Cycle phase colors
+    menstruation: "#FF6B6B",
+    follicular: "#6BB6FF",
+    ovulation: "#FFD93D",
+    luteal: "#B565D8",
   },
   dark: {
     text: "#ECEDEE",
+    textSecondary: "#9BA1A6",
     background: "#151718",
+    surface: "#1E2022",
     tint: tintColorDark,
+    accent: "#00C9D7",
+    accentSecondary: "#FF6B6B",
     icon: "#9BA1A6",
     tabIconDefault: "#9BA1A6",
     tabIconSelected: tintColorDark,
+    border: "#2D3135",
+    success: "#10B981",
+    warning: "#F59E0B",
+    error: "#EF4444",
+    // Cycle phase colors
+    menstruation: "#FF6B6B",
+    follicular: "#6BB6FF",
+    ovulation: "#FFD93D",
+    luteal: "#B565D8",
   },
 };
 

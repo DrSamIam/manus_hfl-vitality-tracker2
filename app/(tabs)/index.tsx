@@ -1,278 +1,425 @@
-import { Image } from "expo-image";
-import { useRouter, Link } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, StyleSheet } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { HelloWave } from "@/components/hello-wave";
-import ParallaxScrollView from "@/components/parallax-scroll-view";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { getLoginUrl } from "@/constants/oauth";
+import { Colors } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { trpc } from "@/lib/trpc";
 
-export default function HomeScreen() {
-  const { user, loading, isAuthenticated, logout } = useAuth();
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+export default function DashboardScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? "light"];
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
 
-  useEffect(() => {
-    console.log("[HomeScreen] Auth state:", {
-      hasUser: !!user,
-      loading,
-      isAuthenticated,
-      user: user ? { id: user.id, openId: user.openId, name: user.name, email: user.email } : null,
-    });
-  }, [user, loading, isAuthenticated]);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleLogin = async () => {
-    try {
-      console.log("[Auth] Login button clicked");
-      setIsLoggingIn(true);
-      const loginUrl = getLoginUrl();
-      console.log("[Auth] Generated login URL:", loginUrl);
+  const { data: profile, refetch: refetchProfile } = trpc.profile.get.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+  const { data: streak } = trpc.symptoms.streak.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+  const { data: todaysSymptom, refetch: refetchSymptom } = trpc.symptoms.byDate.useQuery(
+    { logDate: new Date().toISOString().split("T")[0] },
+    { enabled: isAuthenticated }
+  );
+  const { data: supplements } = trpc.supplements.list.useQuery(
+    { activeOnly: true },
+    { enabled: isAuthenticated }
+  );
+  const { data: cycleDay } = trpc.cycles.currentDay.useQuery(undefined, {
+    enabled: isAuthenticated && !!profile?.cycleTrackingEnabled,
+  });
 
-      // On web, use direct redirect in same tab
-      // On mobile, use WebBrowser to open OAuth in a separate context
-      if (Platform.OS === "web") {
-        console.log("[Auth] Web platform: redirecting to OAuth in same tab...");
-        window.location.href = loginUrl;
-        return;
-      }
-
-      // Mobile: Open OAuth URL in browser
-      // The OAuth server will redirect to our deep link (manusapp://oauth/callback?code=...&state=...)
-      console.log("[Auth] Opening OAuth URL in browser...");
-      const result = await WebBrowser.openAuthSessionAsync(
-        loginUrl,
-        undefined, // Deep link is already configured in getLoginUrl, so no need to specify here
-        {
-          preferEphemeralSession: false,
-          showInRecents: true,
-        },
-      );
-
-      console.log("[Auth] WebBrowser result:", result);
-      if (result.type === "cancel") {
-        console.log("[Auth] OAuth cancelled by user");
-      } else if (result.type === "dismiss") {
-        console.log("[Auth] OAuth dismissed");
-      } else if (result.type === "success" && result.url) {
-        console.log("[Auth] OAuth session successful, navigating to callback:", result.url);
-        // Extract code and state from the URL
-        try {
-          // Parse the URL - it might be exp:// or a regular URL
-          let url: URL;
-          if (result.url.startsWith("exp://") || result.url.startsWith("exps://")) {
-            // For exp:// URLs, we need to parse them differently
-            // Format: exp://192.168.31.156:8081/--/oauth/callback?code=...&state=...
-            const urlStr = result.url.replace(/^exp(s)?:\/\//, "http://");
-            url = new URL(urlStr);
-          } else {
-            url = new URL(result.url);
-          }
-
-          const code = url.searchParams.get("code");
-          const state = url.searchParams.get("state");
-          const error = url.searchParams.get("error");
-
-          console.log("[Auth] Extracted params from callback URL:", {
-            code: code?.substring(0, 20) + "...",
-            state: state?.substring(0, 20) + "...",
-            error,
-          });
-
-          if (error) {
-            console.error("[Auth] OAuth error in callback:", error);
-            return;
-          }
-
-          if (code && state) {
-            // Navigate to callback route with params
-            console.log("[Auth] Navigating to callback route with params...");
-            router.push({
-              pathname: "/oauth/callback" as any,
-              params: { code, state },
-            });
-          } else {
-            console.error("[Auth] Missing code or state in callback URL");
-          }
-        } catch (err) {
-          console.error("[Auth] Failed to parse callback URL:", err, result.url);
-          // Fallback: try parsing with regex
-          const codeMatch = result.url.match(/[?&]code=([^&]+)/);
-          const stateMatch = result.url.match(/[?&]state=([^&]+)/);
-
-          if (codeMatch && stateMatch) {
-            const code = decodeURIComponent(codeMatch[1]);
-            const state = decodeURIComponent(stateMatch[1]);
-            console.log("[Auth] Fallback: extracted params via regex, navigating...");
-            router.push({
-              pathname: "/oauth/callback" as any,
-              params: { code, state },
-            });
-          } else {
-            console.error("[Auth] Could not extract code/state from URL");
-          }
-        }
-      }
-    } catch (error) {
-      console.error("[Auth] Login error:", error);
-    } finally {
-      setIsLoggingIn(false);
-    }
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([refetchProfile(), refetchSymptom()]);
+    setRefreshing(false);
   };
 
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: "#A1CEDC", dark: "#1D3D47" }}
-      headerImage={
-        <Image
-          source={require("@/assets/images/partial-react-logo.png")}
-          style={styles.reactLogo}
-        />
-      }
-    >
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.authContainer}>
-        {loading ? (
-          <ActivityIndicator />
-        ) : isAuthenticated && user ? (
-          <ThemedView style={styles.userInfo}>
-            <ThemedText type="subtitle">Logged in as</ThemedText>
-            <ThemedText type="defaultSemiBold">{user.name || user.email || user.openId}</ThemedText>
-            <Pressable onPress={logout} style={styles.logoutButton}>
-              <ThemedText style={styles.logoutText}>Logout</ThemedText>
-            </Pressable>
-          </ThemedView>
-        ) : (
-          <Pressable
-            onPress={handleLogin}
-            disabled={isLoggingIn}
-            style={[styles.loginButton, isLoggingIn && styles.loginButtonDisabled]}
-          >
-            {isLoggingIn ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <ThemedText style={styles.loginText}>Login</ThemedText>
-            )}
-          </Pressable>
-        )}
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{" "}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: "cmd + d",
-              android: "cmd + m",
-              web: "F12",
-            })}
-          </ThemedText>{" "}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert("Action pressed")} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert("Share pressed")}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert("Delete pressed")}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  // Redirect to onboarding if not completed
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && profile && !profile.onboardingCompleted) {
+      router.replace("/onboarding/welcome" as any);
+    }
+  }, [authLoading, isAuthenticated, profile]);
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
+  // Show login prompt if not authenticated
+  if (!authLoading && !isAuthenticated) {
+    return (
+      <ThemedView style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>
+        <View style={styles.centered}>
+          <ThemedText type="title" style={styles.welcomeTitle}>
+            HFL Vitality Tracker
+          </ThemedText>
+          <ThemedText style={[styles.welcomeSubtitle, { color: colors.textSecondary }]}>
+            Track your hormones, symptoms, and supplements to optimize your health
+          </ThemedText>
+          <Pressable
+            onPress={() => router.push("/onboarding/welcome" as any)}
+            style={({ pressed }) => [
+              styles.loginButton,
+              { backgroundColor: colors.tint },
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <ThemedText type="defaultSemiBold" style={styles.loginButtonText}>
+              Get Started
+            </ThemedText>
+          </Pressable>
+        </View>
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{" "}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{" "}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{" "}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
+    );
+  }
+
+  if (authLoading || !profile) {
+    return (
+      <ThemedView style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.tint} />
       </ThemedView>
-    </ParallaxScrollView>
+    );
+  }
+
+  const hasLoggedToday = !!todaysSymptom;
+  const isFemale = profile.biologicalSex === "female";
+  const showCycleTracking = isFemale && profile.cycleTrackingEnabled;
+
+  // Get primary biomarker label based on sex
+  const primaryBiomarkerLabel =
+    profile.biologicalSex === "male"
+      ? "Testosterone"
+      : profile.biologicalSex === "female"
+        ? "Estradiol"
+        : "Primary Biomarker";
+
+  return (
+    <ThemedView style={styles.container}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(insets.top, 20),
+            paddingBottom: Math.max(insets.bottom, 20) + 80,
+            paddingLeft: Math.max(insets.left, 16),
+            paddingRight: Math.max(insets.right, 16),
+          },
+        ]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.tint} />
+        }
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <ThemedText type="title">Dashboard</ThemedText>
+          <ThemedText style={[styles.greeting, { color: colors.textSecondary }]}>
+            Welcome back{user?.name ? `, ${user.name}` : ""}!
+          </ThemedText>
+        </View>
+
+        {/* Quick Stats Cards */}
+        <View style={styles.statsGrid}>
+          {/* Latest Hormone */}
+          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
+              Latest {primaryBiomarkerLabel}
+            </ThemedText>
+            <ThemedText type="title" style={[styles.statValue, { color: colors.tint }]}>
+              --
+            </ThemedText>
+            <ThemedText style={[styles.statSubtext, { color: colors.textSecondary }]}>
+              No data yet
+            </ThemedText>
+          </View>
+
+          {/* Streak */}
+          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
+              Current Streak
+            </ThemedText>
+            <View style={styles.streakRow}>
+              <ThemedText type="title" style={[styles.statValue, { color: colors.accentSecondary }]}>
+                {streak ?? 0}
+              </ThemedText>
+              <ThemedText style={{ fontSize: 24 }}>🔥</ThemedText>
+            </View>
+            <ThemedText style={[styles.statSubtext, { color: colors.textSecondary }]}>
+              {streak === 1 ? "day" : "days"}
+            </ThemedText>
+          </View>
+
+          {/* Energy Trend */}
+          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
+              Energy Trend
+            </ThemedText>
+            <ThemedText type="title" style={[styles.statValue, { color: colors.success }]}>
+              --
+            </ThemedText>
+            <ThemedText style={[styles.statSubtext, { color: colors.textSecondary }]}>
+              7-day average
+            </ThemedText>
+          </View>
+
+          {/* Cycle Day or Next Lab */}
+          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
+              {showCycleTracking ? "Cycle Day" : "Next Lab Due"}
+            </ThemedText>
+            <ThemedText type="title" style={[styles.statValue, { color: colors.accent }]}>
+              {showCycleTracking ? (cycleDay ?? "--") : "--"}
+            </ThemedText>
+            <ThemedText style={[styles.statSubtext, { color: colors.textSecondary }]}>
+              {showCycleTracking ? "of cycle" : "Not scheduled"}
+            </ThemedText>
+          </View>
+        </View>
+
+        {/* Today's Actions */}
+        <View style={styles.section}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
+            Today's Actions
+          </ThemedText>
+
+          {!hasLoggedToday ? (
+            <Pressable
+              onPress={() => router.push("/(tabs)/symptoms" as any)}
+              style={({ pressed }) => [
+                styles.actionButton,
+                {
+                  backgroundColor: colors.tint,
+                  shadowColor: colors.tint,
+                },
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <ThemedText type="defaultSemiBold" style={styles.actionButtonText}>
+                📝 Daily Check-In
+              </ThemedText>
+              <ThemedText style={styles.actionButtonSubtext}>
+                Log your symptoms for today
+              </ThemedText>
+            </Pressable>
+          ) : (
+            <View style={[styles.completedCard, { backgroundColor: colors.surface }]}>
+              <ThemedText style={{ fontSize: 24 }}>✅</ThemedText>
+              <ThemedText type="defaultSemiBold" style={{ marginLeft: 12 }}>
+                Daily check-in complete!
+              </ThemedText>
+            </View>
+          )}
+
+          {/* Supplement Checklist */}
+          {supplements && supplements.length > 0 && (
+            <View style={[styles.supplementsCard, { backgroundColor: colors.surface }]}>
+              <ThemedText type="defaultSemiBold" style={styles.supplementsTitle}>
+                Today's Supplements
+              </ThemedText>
+              {supplements.slice(0, 3).map((supplement) => (
+                <View key={supplement.id} style={styles.supplementRow}>
+                  <ThemedText style={styles.supplementName}>
+                    {supplement.name} ({supplement.dosage})
+                  </ThemedText>
+                  <View style={styles.supplementCheckboxes}>
+                    <View style={[styles.miniCheckbox, { borderColor: colors.border }]}>
+                      <ThemedText style={{ fontSize: 10, color: colors.textSecondary }}>AM</ThemedText>
+                    </View>
+                    <View style={[styles.miniCheckbox, { borderColor: colors.border }]}>
+                      <ThemedText style={{ fontSize: 10, color: colors.textSecondary }}>PM</ThemedText>
+                    </View>
+                  </View>
+                </View>
+              ))}
+              {supplements.length > 3 && (
+                <Pressable onPress={() => router.push("/(tabs)/supplements" as any)}>
+                  <ThemedText style={[styles.viewAllLink, { color: colors.tint }]}>
+                    View all {supplements.length} supplements →
+                  </ThemedText>
+                </Pressable>
+              )}
+            </View>
+          )}
+        </View>
+
+        {/* Recent Activity */}
+        <View style={styles.section}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
+            Recent Activity
+          </ThemedText>
+          <View style={[styles.emptyState, { backgroundColor: colors.surface }]}>
+            <ThemedText style={{ fontSize: 32, marginBottom: 8 }}>📊</ThemedText>
+            <ThemedText style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+              Start tracking to see your activity here
+            </ThemedText>
+          </View>
+        </View>
+      </ScrollView>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: {
+    flex: 1,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  header: {
+    marginBottom: 24,
+  },
+  greeting: {
+    fontSize: 16,
+    marginTop: 4,
+  },
+  welcomeTitle: {
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  welcomeSubtitle: {
+    textAlign: "center",
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 32,
+    paddingHorizontal: 24,
+  },
+  loginButton: {
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderRadius: 12,
+    minHeight: 56,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buttonPressed: {
+    opacity: 0.8,
+  },
+  loginButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+  },
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 24,
+  },
+  statCard: {
+    width: "48%",
+    flexGrow: 1,
+    padding: 16,
+    borderRadius: 12,
+    minHeight: 100,
+  },
+  statLabel: {
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  statValue: {
+    fontSize: 28,
+    lineHeight: 34,
+  },
+  statSubtext: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  streakRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  section: {
+    marginBottom: 24,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: "absolute",
-  },
-  authContainer: {
+  sectionTitle: {
     marginBottom: 16,
-    padding: 16,
-    borderRadius: 8,
-    backgroundColor: "rgba(0, 0, 0, 0.05)",
   },
-  userInfo: {
-    gap: 8,
+  actionButton: {
+    padding: 20,
+    borderRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  actionButtonText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    marginBottom: 4,
+  },
+  actionButtonSubtext: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 14,
+  },
+  completedCard: {
+    flexDirection: "row",
     alignItems: "center",
+    padding: 16,
+    borderRadius: 12,
   },
-  loginButton: {
-    backgroundColor: "#007AFF",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
+  supplementsCard: {
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  supplementsTitle: {
+    marginBottom: 12,
+  },
+  supplementRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  supplementName: {
+    flex: 1,
+    fontSize: 14,
+  },
+  supplementCheckboxes: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  miniCheckbox: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 44,
   },
-  loginButtonDisabled: {
-    opacity: 0.6,
-  },
-  loginText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  logoutButton: {
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    backgroundColor: "rgba(255, 59, 48, 0.1)",
-  },
-  logoutText: {
-    color: "#FF3B30",
+  viewAllLink: {
     fontSize: 14,
-    fontWeight: "500",
+    marginTop: 8,
+  },
+  emptyState: {
+    padding: 32,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  emptyStateText: {
+    textAlign: "center",
+    fontSize: 14,
   },
 });

@@ -23,6 +23,14 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),
+    biologicalSex: null,
+    age: null,
+    goals: null,
+    currentSymptoms: null,
+    hasRecentLabWork: false,
+    cycleTrackingEnabled: false,
+    premiumStatus: false,
+    onboardingCompleted: false,
   };
 
   const ctx: TrpcContext = {

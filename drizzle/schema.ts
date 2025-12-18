@@ -1,4 +1,15 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  boolean,
+  date,
+  decimal,
+  int,
+  json,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+} from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -20,9 +31,157 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  
+  // Health profile fields
+  biologicalSex: mysqlEnum("biologicalSex", ["male", "female", "prefer_not_to_say"]),
+  age: int("age"),
+  goals: json("goals").$type<string[]>(), // Array of goal strings
+  currentSymptoms: json("currentSymptoms").$type<string[]>(), // Array of symptom strings
+  hasRecentLabWork: boolean("hasRecentLabWork").default(false),
+  cycleTrackingEnabled: boolean("cycleTrackingEnabled").default(false),
+  premiumStatus: boolean("premiumStatus").default(false),
+  onboardingCompleted: boolean("onboardingCompleted").default(false),
 });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+// ========== BIOMARKERS TABLE ==========
+export const biomarkers = mysqlTable("biomarkers", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  markerName: varchar("markerName", { length: 100 }).notNull(),
+  value: decimal("value", { precision: 10, scale: 2 }).notNull(),
+  unit: varchar("unit", { length: 50 }).notNull(),
+  testDate: date("testDate").notNull(),
+  cycleDay: int("cycleDay"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+// ========== SYMPTOMS TABLE ==========
+export const symptoms = mysqlTable("symptoms", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  logDate: date("logDate").notNull(),
+  energy: int("energy"),
+  mood: int("mood"),
+  sleep: int("sleep"),
+  mentalClarity: int("mentalClarity"),
+  libido: int("libido"),
+  performanceStamina: int("performanceStamina"),
+  notes: text("notes"),
+  cycleDay: int("cycleDay"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+// ========== MENSTRUAL CYCLES TABLE ==========
+export const menstrualCycles = mysqlTable("menstrualCycles", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  cycleStartDate: date("cycleStartDate").notNull(),
+  cycleEndDate: date("cycleEndDate"),
+  cycleLength: int("cycleLength"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+// ========== PERIOD SYMPTOMS TABLE ==========
+export const periodSymptoms = mysqlTable("periodSymptoms", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  symptomDate: date("symptomDate").notNull(),
+  cycleDay: int("cycleDay"),
+  flowLevel: mysqlEnum("flowLevel", ["none", "spotting", "light", "moderate", "heavy"]),
+  crampingSeverity: int("crampingSeverity"),
+  symptomsArray: json("symptomsArray").$type<string[]>(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+// ========== SUPPLEMENTS TABLE ==========
+export const supplements = mysqlTable("supplements", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  dosage: varchar("dosage", { length: 100 }).notNull(),
+  timing: mysqlEnum("timing", ["morning", "afternoon", "evening", "before_bed", "multiple_times"]).notNull(),
+  startDate: date("startDate").notNull(),
+  active: boolean("active").default(true).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+// ========== SUPPLEMENT LOGS TABLE ==========
+export const supplementLogs = mysqlTable("supplementLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  supplementId: int("supplementId").notNull(),
+  userId: int("userId").notNull(),
+  logDate: date("logDate").notNull(),
+  amTaken: boolean("amTaken").default(false).notNull(),
+  pmTaken: boolean("pmTaken").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+// ========== INSIGHTS TABLE ==========
+export const insights = mysqlTable("insights", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  insightText: text("insightText").notNull(),
+  insightType: varchar("insightType", { length: 50 }).notNull(),
+  dataSource: text("dataSource"),
+  generatedDate: timestamp("generatedDate").defaultNow().notNull(),
+});
+
+// ========== NOTIFICATION SETTINGS TABLE ==========
+export const notificationSettings = mysqlTable("notificationSettings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  dailySymptomReminder: boolean("dailySymptomReminder").default(true).notNull(),
+  dailySymptomReminderTime: varchar("dailySymptomReminderTime", { length: 5 }).default("20:00"),
+  supplementReminders: boolean("supplementReminders").default(true).notNull(),
+  weeklyInsightsEmail: boolean("weeklyInsightsEmail").default(true).notNull(),
+  labTestReminders: boolean("labTestReminders").default(true).notNull(),
+  periodPredictionNotifications: boolean("periodPredictionNotifications").default(false).notNull(),
+  ovulationWindowNotifications: boolean("ovulationWindowNotifications").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// ========== LAB UPLOADS TABLE ==========
+export const labUploads = mysqlTable("labUploads", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  fileName: varchar("fileName", { length: 255 }).notNull(),
+  fileUrl: text("fileUrl").notNull(),
+  uploadDate: timestamp("uploadDate").defaultNow().notNull(),
+  processed: boolean("processed").default(false).notNull(),
+  notes: text("notes"),
+});
+
+// ========== TYPE EXPORTS ==========
+export type Biomarker = typeof biomarkers.$inferSelect;
+export type InsertBiomarker = typeof biomarkers.$inferInsert;
+
+export type Symptom = typeof symptoms.$inferSelect;
+export type InsertSymptom = typeof symptoms.$inferInsert;
+
+export type MenstrualCycle = typeof menstrualCycles.$inferSelect;
+export type InsertMenstrualCycle = typeof menstrualCycles.$inferInsert;
+
+export type PeriodSymptom = typeof periodSymptoms.$inferSelect;
+export type InsertPeriodSymptom = typeof periodSymptoms.$inferInsert;
+
+export type Supplement = typeof supplements.$inferSelect;
+export type InsertSupplement = typeof supplements.$inferInsert;
+
+export type SupplementLog = typeof supplementLogs.$inferSelect;
+export type InsertSupplementLog = typeof supplementLogs.$inferInsert;
+
+export type Insight = typeof insights.$inferSelect;
+export type InsertInsight = typeof insights.$inferInsert;
+
+export type NotificationSettings = typeof notificationSettings.$inferSelect;
+export type InsertNotificationSettings = typeof notificationSettings.$inferInsert;
+
+export type LabUpload = typeof labUploads.$inferSelect;
+export type InsertLabUpload = typeof labUploads.$inferInsert;
