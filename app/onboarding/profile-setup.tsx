@@ -65,7 +65,7 @@ export default function ProfileSetupScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
-  const { user } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
 
   const [biologicalSex, setBiologicalSex] = useState<"male" | "female" | "prefer_not_to_say" | null>(null);
   const [age, setAge] = useState("");
@@ -102,9 +102,18 @@ export default function ProfileSetupScreen() {
     );
   };
 
+  const [error, setError] = useState<string | null>(null);
+
   const handleComplete = async () => {
     if (!biologicalSex || !age) return;
+    
+    // Check if user is authenticated
+    if (!isAuthenticated || !user) {
+      setError("Please log in first to complete your profile setup.");
+      return;
+    }
 
+    setError(null);
     try {
       await updateProfile.mutateAsync({
         biologicalSex,
@@ -117,8 +126,9 @@ export default function ProfileSetupScreen() {
       });
 
       router.replace("/(tabs)");
-    } catch (error) {
-      console.error("Failed to update profile:", error);
+    } catch (err: any) {
+      console.error("Failed to update profile:", err);
+      setError(err?.message || "Failed to save profile. Please try again.");
     }
   };
 
@@ -378,18 +388,42 @@ export default function ProfileSetupScreen() {
           </View>
         )}
 
+        {/* Error Message */}
+        {error && (
+          <View style={[styles.errorContainer, { backgroundColor: colors.error + "20" }]}>
+            <ThemedText style={{ color: colors.error, textAlign: "center" }}>
+              {error}
+            </ThemedText>
+          </View>
+        )}
+
+        {/* Login Required Notice */}
+        {!isAuthenticated && !authLoading && (
+          <View style={[styles.loginNotice, { backgroundColor: colors.warning + "20" }]}>
+            <ThemedText style={{ color: colors.warning, textAlign: "center", marginBottom: 12 }}>
+              Please log in to save your profile
+            </ThemedText>
+            <Pressable
+              onPress={() => router.push("/(tabs)" as any)}
+              style={[styles.loginButton, { backgroundColor: colors.tint }]}
+            >
+              <ThemedText style={{ color: "#FFFFFF", fontWeight: "600" }}>Go to Login</ThemedText>
+            </Pressable>
+          </View>
+        )}
+
         {/* Complete Button */}
         <Pressable
           onPress={handleComplete}
-          disabled={!canComplete || updateProfile.isPending}
+          disabled={!canComplete || updateProfile.isPending || !isAuthenticated}
           style={({ pressed }) => [
             styles.completeButton,
             {
-              backgroundColor: canComplete ? colors.tint : colors.surface,
+              backgroundColor: canComplete && isAuthenticated ? colors.tint : colors.surface,
               borderColor: colors.border,
             },
-            pressed && canComplete && styles.buttonPressed,
-            (!canComplete || updateProfile.isPending) && styles.buttonDisabled,
+            pressed && canComplete && isAuthenticated && styles.buttonPressed,
+            (!canComplete || updateProfile.isPending || !isAuthenticated) && styles.buttonDisabled,
           ]}
         >
           {updateProfile.isPending ? (
@@ -399,7 +433,7 @@ export default function ProfileSetupScreen() {
               type="defaultSemiBold"
               style={[
                 styles.completeButtonText,
-                { color: canComplete ? "#FFFFFF" : colors.textSecondary },
+                { color: canComplete && isAuthenticated ? "#FFFFFF" : colors.textSecondary },
               ]}
             >
               Complete Setup
@@ -503,5 +537,21 @@ const styles = StyleSheet.create({
   },
   completeButtonText: {
     fontSize: 16,
+  },
+  errorContainer: {
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  loginNotice: {
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: "center",
+  },
+  loginButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
   },
 });

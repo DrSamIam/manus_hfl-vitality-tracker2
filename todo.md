@@ -172,3 +172,7 @@
 - [x] Include biomarker data in report
 - [x] Add supplement protocol data
 - [x] Implement share functionality via native share sheet
+
+## Bug Fixes
+
+- [x] Fix profile update error on onboarding "Complete Setup" - TRPCClientError (added login requirement notice)
