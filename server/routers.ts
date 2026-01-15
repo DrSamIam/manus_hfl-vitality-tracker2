@@ -3,6 +3,8 @@ import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { invokeLLM } from "./_core/llm";
+import { storagePut } from "./storage";
 import * as db from "./db";
 
 export const appRouter = router({
@@ -98,6 +100,125 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         await db.deleteBiomarker(input.id);
         return { success: true };
+      }),
+    
+    parsePdf: protectedProcedure
+      .input(z.object({
+        labUploadId: z.number(),
+        fileData: z.string(),
+        mimeType: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          // Upload file to storage first
+          const fileBuffer = Buffer.from(input.fileData, "base64");
+          const fileKey = `lab-uploads/${ctx.user.id}/${input.labUploadId}-${Date.now()}.${input.mimeType.includes("pdf") ? "pdf" : "jpg"}`;
+          const { url: fileUrl } = await storagePut(fileKey, fileBuffer, input.mimeType);
+          
+          // Update lab upload with actual URL
+          await db.updateLabUpload(input.labUploadId, { fileUrl, processed: false });
+          
+          // Use LLM to parse the lab results
+          const response = await invokeLLM({
+            messages: [
+              {
+                role: "system",
+                content: `You are a medical lab results parser. Extract biomarker values from lab test documents.
+Return a JSON array of biomarkers found. Each biomarker should have:
+- markerName: The name of the biomarker (use standard names like "Testosterone (Total)", "TSH", "Vitamin D", etc.)
+- value: The numeric value as a string
+- unit: The unit of measurement
+- testDate: The test date if found, or null
+
+Only include biomarkers you can clearly identify with their values. If you cannot find any biomarkers, return an empty array.`,
+              },
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "text",
+                    text: "Please extract all biomarker values from this lab report:",
+                  },
+                  input.mimeType.includes("pdf")
+                    ? {
+                        type: "file_url" as const,
+                        file_url: {
+                          url: fileUrl,
+                          mime_type: "application/pdf" as const,
+                        },
+                      }
+                    : {
+                        type: "image_url" as const,
+                        image_url: {
+                          url: fileUrl,
+                          detail: "high" as const,
+                        },
+                      },
+                ],
+              },
+            ],
+            responseFormat: {
+              type: "json_schema",
+              json_schema: {
+                name: "biomarkers",
+                schema: {
+                  type: "object",
+                  properties: {
+                    biomarkers: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          markerName: { type: "string" },
+                          value: { type: "string" },
+                          unit: { type: "string" },
+                          testDate: { type: ["string", "null"] },
+                        },
+                        required: ["markerName", "value", "unit"],
+                      },
+                    },
+                  },
+                  required: ["biomarkers"],
+                },
+                strict: true,
+              },
+            },
+          });
+          
+          const content = response.choices[0]?.message?.content;
+          if (!content || typeof content !== "string") {
+            return { success: false, error: "Failed to parse response", biomarkersFound: 0 };
+          }
+          
+          const parsed = JSON.parse(content);
+          const biomarkersToCreate = parsed.biomarkers || [];
+          
+          // Create biomarker entries
+          let created = 0;
+          for (const biomarker of biomarkersToCreate) {
+            try {
+              await db.createBiomarker({
+                userId: ctx.user.id,
+                markerName: biomarker.markerName,
+                value: biomarker.value,
+                unit: biomarker.unit,
+                testDate: biomarker.testDate ? new Date(biomarker.testDate) : new Date(),
+                notes: "Extracted from uploaded lab results",
+              });
+              created++;
+            } catch (e) {
+              console.error("Failed to create biomarker:", e);
+            }
+          }
+          
+          // Mark as processed
+          await db.updateLabUpload(input.labUploadId, { processed: true });
+          
+          return { success: true, biomarkersFound: created };
+        } catch (error: any) {
+          console.error("PDF parsing error:", error);
+          return { success: false, error: error.message || "Failed to process PDF", biomarkersFound: 0 };
+        }
       }),
   }),
 
@@ -426,6 +547,213 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await db.updateNotificationSettings(ctx.user.id, input);
         return { success: true };
+      }),
+  }),
+
+  // ========== MEDICATIONS ==========
+  medications: router({
+    list: protectedProcedure
+      .input(z.object({ activeOnly: z.boolean().optional() }))
+      .query(async ({ ctx, input }) => {
+        return db.getUserMedications(ctx.user.id, input.activeOnly);
+      }),
+    
+    create: protectedProcedure
+      .input(z.object({
+        drugName: z.string().min(1).max(255),
+        dosage: z.string().min(1).max(100),
+        frequency: z.enum(["once_daily", "twice_daily", "three_times_daily", "as_needed", "weekly", "other"]),
+        timeOfDay: z.enum(["morning", "afternoon", "evening", "bedtime", "with_meals", "multiple"]).optional(),
+        reason: z.string().max(255).optional(),
+        prescriber: z.string().max(255).optional(),
+        startDate: z.string(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await db.createMedication({
+          userId: ctx.user.id,
+          active: true,
+          ...input,
+          startDate: new Date(input.startDate),
+        });
+        return { id };
+      }),
+    
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        drugName: z.string().optional(),
+        dosage: z.string().optional(),
+        frequency: z.enum(["once_daily", "twice_daily", "three_times_daily", "as_needed", "weekly", "other"]).optional(),
+        timeOfDay: z.enum(["morning", "afternoon", "evening", "bedtime", "with_meals", "multiple"]).optional(),
+        reason: z.string().optional(),
+        prescriber: z.string().optional(),
+        active: z.boolean().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updateMedication(id, data);
+        return { success: true };
+      }),
+    
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteMedication(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ========== CHAT (Dr. Sam AI) ==========
+  chat: router({
+    send: protectedProcedure
+      .input(z.object({
+        message: z.string().min(1).max(2000),
+        conversationHistory: z.array(z.object({
+          role: z.enum(["user", "assistant"]),
+          content: z.string(),
+        })).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          // Get user profile for personalization
+          const profile = await db.getUserProfile(ctx.user.id);
+          
+          // Get recent symptoms for context
+          const recentSymptoms = await db.getUserSymptoms(ctx.user.id, 7);
+          
+          // Get recent biomarkers for context
+          const biomarkers = await db.getUserBiomarkers(ctx.user.id);
+          const recentBiomarkers = biomarkers.slice(0, 10);
+          
+          // Get supplements for context
+          const supplements = await db.getUserSupplements(ctx.user.id, true);
+          
+          // Build the Dr. Sam AI system prompt with full personality
+          const drSamPersona = `You are Dr. Sam Robbins, a renowned health and longevity expert with over 25 years of experience helping people optimize their hormones, energy, and overall vitality.
+
+## Your Background
+- Medical degree with specialization in endocrinology and natural medicine
+- 25+ years helping thousands of patients optimize their health
+- Author of numerous health articles and guides
+- Founder of HFL (Health, Fitness & Longevity) solutions
+- Known for practical, science-backed advice that actually works
+
+## Your Expertise Areas
+- Hormone optimization (testosterone, estrogen, cortisol, thyroid, prolactin)
+- Natural supplements and their mechanisms of action
+- Lifestyle factors affecting health (sleep, stress, exercise, diet)
+- Blood work interpretation and optimization strategies
+- Men's and women's health issues
+- Weight management and metabolism
+- Cardiovascular health and blood flow
+- Brain health, memory, and cognitive function
+- Sleep optimization
+- Stress and adrenal health
+
+## Your Communication Style
+- WARM and PERSONABLE - like talking to a trusted friend who happens to be a doctor
+- HOPEFUL and ENCOURAGING - always emphasize that improvement is possible
+- PRACTICAL - give specific, actionable advice, not vague suggestions
+- EDUCATIONAL - explain the "why" behind recommendations
+- CONVERSATIONAL - not clinical or overly formal
+- SUPPORTIVE - non-judgmental, understanding that health journeys are challenging
+
+## Tone Guidelines - CRITICAL
+- NEVER use alarming or scary language
+- NEVER say things like "This is concerning" or "You should be worried"
+- INSTEAD say "This is an area where we can make great improvements" or "Here's what we can do about this"
+- Frame health issues as OPPORTUNITIES for improvement, not problems
+- Use phrases like:
+  - "The good news is..."
+  - "Here's what we can do..."
+  - "You're in a great position to improve..."
+  - "Many of my patients have seen great results by..."
+  - "Let me share what's worked well for others in your situation..."
+- Celebrate small wins and progress
+- Emphasize that the body can heal and improve with the right approach
+- Be like a supportive coach, not a worried doctor
+
+## Available Products You Can Recommend
+When relevant, recommend these products by their EXACT name:
+- **AlphaViril**: Natural testosterone optimization for men (libido, energy, muscle)
+- **Body-Brain Energy**: All-day physical and mental energy without jitters
+- **Blood Flow Optimizer**: Supports healthy blood circulation and cardiovascular health
+- **Blood Pressure Optimizer**: Natural support for healthy blood pressure levels
+- **Blood Sugar Optimizer**: Supports healthy blood sugar and reduces cravings
+- **Cholesterol Optimizer**: Natural support for healthy cholesterol profile
+- **Deep Sleep Formula**: Optimize sleep hormones for deep, restorative sleep
+- **Inflame & Pain Relief**: Natural support for inflammation and joint comfort
+- **Lean Optimizer**: Optimize fat-burning hormones and metabolism
+- **Perfect Vitamin D3+K2**: Optimal vitamin D3 with K2 for immune and bone health
+- **ProVanax**: Natural mood and anxiety support
+- **Stress & Cortisol Relief**: Balance stress hormones and adrenal function
+
+When recommending products, explain WHY they would help based on the user's specific situation.
+
+## Follow-Up Engagement
+Always end responses with one of these (vary them):
+- "Would you like me to create a custom 30-day plan for you?"
+- "Want me to break this down into simple daily steps?"
+- "Should I prioritize these recommendations based on your goals?"
+- "Would you like more details on any of these suggestions?"
+- "Is there a specific area you'd like me to focus on first?"`;
+
+          // Build user context section
+          let userContext = "\n\n## Current User Profile";
+          if (profile?.biologicalSex) userContext += `\n- Biological Sex: ${profile.biologicalSex}`;
+          if (profile?.age) userContext += `\n- Age: ${profile.age}`;
+          if (profile?.goals?.length) userContext += `\n- Health Goals: ${profile.goals.join(", ")}`;
+          if (profile?.currentSymptoms?.length) userContext += `\n- Current Concerns: ${profile.currentSymptoms.join(", ")}`;
+          
+          // Add recent symptoms
+          if (recentSymptoms.length > 0) {
+            userContext += "\n\n## Recent Symptom Tracking (last 7 days)";
+            for (const s of recentSymptoms.slice(0, 5)) {
+              userContext += `\n- Energy: ${s.energy}/10, Mood: ${s.mood}/10, Sleep: ${s.sleep}/10`;
+            }
+          }
+          
+          // Add recent biomarkers
+          if (recentBiomarkers.length > 0) {
+            userContext += "\n\n## Recent Lab Results";
+            for (const b of recentBiomarkers) {
+              userContext += `\n- ${b.markerName}: ${b.value} ${b.unit}`;
+            }
+          }
+          
+          // Add current supplements
+          if (supplements.length > 0) {
+            userContext += "\n\n## Current Supplements";
+            for (const s of supplements) {
+              userContext += `\n- ${s.name} (${s.dosage})`;
+            }
+          }
+          
+          const systemPrompt = drSamPersona + userContext;
+
+          const messages = [
+            { role: "system" as const, content: systemPrompt },
+            ...(input.conversationHistory || []).map(m => ({
+              role: m.role as "user" | "assistant",
+              content: m.content,
+            })),
+            { role: "user" as const, content: input.message },
+          ];
+
+          const response = await invokeLLM({ messages });
+          
+          const assistantMessage = response.choices[0]?.message?.content;
+          if (!assistantMessage || typeof assistantMessage !== "string") {
+            throw new Error("Failed to get response from AI");
+          }
+
+          return { message: assistantMessage };
+        } catch (error: any) {
+          console.error("Chat error:", error);
+          throw new Error("Failed to process chat message");
+        }
       }),
   }),
 

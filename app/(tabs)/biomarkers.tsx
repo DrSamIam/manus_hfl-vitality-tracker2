@@ -1,8 +1,11 @@
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
+  Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -72,6 +75,8 @@ export default function BiomarkersScreen() {
   const [value, setValue] = useState("");
   const [testDate, setTestDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
 
   const { data: profile } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
   const { data: biomarkers, refetch, isLoading } = trpc.biomarkers.list.useQuery(undefined, { enabled: isAuthenticated });
@@ -85,6 +90,8 @@ export default function BiomarkersScreen() {
   const deleteBiomarker = trpc.biomarkers.delete.useMutation({
     onSuccess: () => refetch(),
   });
+  const createLabUpload = trpc.labUploads.create.useMutation();
+  const parsePdfMutation = trpc.biomarkers.parsePdf.useMutation();
 
   const resetForm = () => {
     setSelectedBiomarker(null);
@@ -114,6 +121,103 @@ export default function BiomarkersScreen() {
     });
   };
 
+  const handleUploadPdf = async () => {
+    try {
+      setIsUploading(true);
+      setUploadProgress("Selecting file...");
+
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "image/*"],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        setIsUploading(false);
+        setUploadProgress("");
+        return;
+      }
+
+      const file = result.assets[0];
+      if (!file) {
+        setIsUploading(false);
+        return;
+      }
+
+      setUploadProgress("Reading file...");
+
+      // Read the file as base64
+      let base64Data: string;
+      if (Platform.OS === "web") {
+        // For web, fetch the file and convert to base64
+        const response = await fetch(file.uri);
+        const blob = await response.blob();
+        base64Data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            resolve(result.split(",")[1]);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        // For native, use FileSystem
+        base64Data = await FileSystem.readAsStringAsync(file.uri, {
+          encoding: "base64",
+        });
+      }
+
+      setUploadProgress("Uploading file...");
+
+      // Upload to server for processing
+      const uploadResult = await createLabUpload.mutateAsync({
+        fileName: file.name || "lab_results.pdf",
+        fileUrl: `data:${file.mimeType || "application/pdf"};base64,${base64Data}`,
+        notes: `Uploaded on ${new Date().toLocaleDateString()}`,
+      });
+
+      setUploadProgress("Processing with AI...");
+
+      // Parse the PDF with AI
+      const parseResult = await parsePdfMutation.mutateAsync({
+        labUploadId: uploadResult.id,
+        fileData: base64Data,
+        mimeType: file.mimeType || "application/pdf",
+      });
+
+      if (parseResult.success && parseResult.biomarkersFound > 0) {
+        Alert.alert(
+          "Success!",
+          `Found and saved ${parseResult.biomarkersFound} biomarker${parseResult.biomarkersFound > 1 ? "s" : ""} from your lab results.`,
+          [{ text: "OK" }]
+        );
+        refetch();
+      } else if (parseResult.success && parseResult.biomarkersFound === 0) {
+        Alert.alert(
+          "No Biomarkers Found",
+          "We couldn't find any recognizable biomarkers in this file. Try uploading a different file or add results manually.",
+          [{ text: "OK" }]
+        );
+      } else {
+        Alert.alert(
+          "Processing Issue",
+          parseResult.error || "There was an issue processing your file. Please try again or add results manually.",
+          [{ text: "OK" }]
+        );
+      }
+    } catch (error: any) {
+      console.error("PDF upload error:", error);
+      Alert.alert(
+        "Upload Failed",
+        error.message || "Failed to upload and process the file. Please try again.",
+        [{ text: "OK" }]
+      );
+    } finally {
+      setIsUploading(false);
+      setUploadProgress("");
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -141,26 +245,54 @@ export default function BiomarkersScreen() {
           },
         ]}
       >
+        {/* Header with buttons */}
         <View style={styles.header}>
-          <ThemedText type="title">Biomarkers</ThemedText>
-          <ThemedText style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Hormone & Biomarker Tracking
-          </ThemedText>
+          <View>
+            <ThemedText type="title">Biomarkers</ThemedText>
+            <ThemedText style={[styles.subtitle, { color: colors.textSecondary }]}>
+              Track your blood test results over time
+            </ThemedText>
+          </View>
         </View>
 
-        {/* Add Button */}
-        <Pressable
-          onPress={() => setShowAddModal(true)}
-          style={({ pressed }) => [
-            styles.addButton,
-            { backgroundColor: colors.tint },
-            pressed && styles.buttonPressed,
-          ]}
-        >
-          <ThemedText type="defaultSemiBold" style={styles.addButtonText}>
-            + Add New Result
-          </ThemedText>
-        </Pressable>
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          <Pressable
+            onPress={handleUploadPdf}
+            disabled={isUploading}
+            style={({ pressed }) => [
+              styles.uploadButton,
+              { backgroundColor: colors.tint },
+              pressed && styles.buttonPressed,
+              isUploading && styles.buttonDisabled,
+            ]}
+          >
+            {isUploading ? (
+              <View style={styles.uploadingContainer}>
+                <ActivityIndicator color="#FFFFFF" size="small" />
+                <ThemedText style={styles.uploadButtonText}>
+                  {uploadProgress || "Processing..."}
+                </ThemedText>
+              </View>
+            ) : (
+              <ThemedText type="defaultSemiBold" style={styles.uploadButtonText}>
+                ↑ Upload PDF
+              </ThemedText>
+            )}
+          </Pressable>
+          <Pressable
+            onPress={() => setShowAddModal(true)}
+            style={({ pressed }) => [
+              styles.addManualButton,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <ThemedText type="defaultSemiBold" style={{ color: colors.text }}>
+              + Add Manual
+            </ThemedText>
+          </Pressable>
+        </View>
 
         {/* Biomarkers List */}
         {isLoading ? (
@@ -199,13 +331,26 @@ export default function BiomarkersScreen() {
           </View>
         ) : (
           <View style={[styles.emptyState, { backgroundColor: colors.surface }]}>
-            <ThemedText style={{ fontSize: 48, marginBottom: 16 }}>📊</ThemedText>
+            <ThemedText style={{ fontSize: 48, marginBottom: 16 }}>↑</ThemedText>
             <ThemedText type="subtitle" style={{ marginBottom: 8 }}>
-              No Biomarkers Yet
+              No biomarkers yet
             </ThemedText>
             <ThemedText style={[styles.emptyText, { color: colors.textSecondary }]}>
-              Add your first lab result to start tracking your hormones and biomarkers over time.
+              Upload a blood test PDF or add results manually
             </ThemedText>
+            <Pressable
+              onPress={handleUploadPdf}
+              disabled={isUploading}
+              style={({ pressed }) => [
+                styles.emptyUploadButton,
+                { backgroundColor: colors.tint },
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <ThemedText type="defaultSemiBold" style={styles.uploadButtonText}>
+                Upload Lab Results
+              </ThemedText>
+            </Pressable>
           </View>
         )}
       </ScrollView>
@@ -324,16 +469,37 @@ const styles = StyleSheet.create({
   centered: { justifyContent: "center", alignItems: "center" },
   scrollView: { flex: 1 },
   scrollContent: { paddingBottom: 100 },
-  header: { marginBottom: 24 },
+  header: { marginBottom: 16 },
   subtitle: { fontSize: 16, marginTop: 4 },
-  addButton: {
+  actionButtons: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 24,
+  },
+  uploadButton: {
+    flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
-    marginBottom: 24,
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  uploadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  addManualButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
   },
   buttonPressed: { opacity: 0.8 },
-  addButtonText: { color: "#FFFFFF", fontSize: 16 },
+  buttonDisabled: { opacity: 0.6 },
+  uploadButtonText: { color: "#FFFFFF", fontSize: 16 },
   biomarkersList: { gap: 12 },
   biomarkerCard: { padding: 16, borderRadius: 12 },
   biomarkerHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
@@ -343,7 +509,13 @@ const styles = StyleSheet.create({
   date: { fontSize: 12, marginTop: 8 },
   notes: { fontSize: 12, marginTop: 4, fontStyle: "italic" },
   emptyState: { padding: 40, borderRadius: 16, alignItems: "center", marginTop: 20 },
-  emptyText: { textAlign: "center", fontSize: 14, lineHeight: 20 },
+  emptyText: { textAlign: "center", fontSize: 14, lineHeight: 20, marginBottom: 20 },
+  emptyUploadButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: "center",
+  },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "90%" },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, borderBottomWidth: 1, borderBottomColor: "#E5E7EB" },

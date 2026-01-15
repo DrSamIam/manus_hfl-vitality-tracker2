@@ -35,6 +35,15 @@ const MAPPING = {
   "bell.fill": "notifications",
   "doc.fill": "description",
   "flame.fill": "local-fire-department",
+  "bubble.left.and.bubble.right.fill": "chat",
+  "stethoscope": "medical-services",
+  "mic.fill": "mic",
+  "speaker.wave.2.fill": "volume-up",
+  "square.and.arrow.up": "share",
+  "doc.on.doc": "content-copy",
+  "fork.knife": "restaurant",
+  "dumbbell.fill": "fitness-center",
+  "cross.case.fill": "local-pharmacy",
 } as IconMapping;
 
 /**

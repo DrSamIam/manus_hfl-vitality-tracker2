@@ -176,3 +176,53 @@
 ## Bug Fixes
 
 - [x] Fix profile update error on onboarding "Complete Setup" - TRPCClientError (added login requirement notice)
+
+
+## V2 Bug Fixes & Feature Requests (from Google Doc)
+
+### Critical Bugs
+- [x] Daily Symptoms: Performance/stamina selection disappears when saving (fixed slider rounding)
+- [x] Biomarkers: PDF upload restored with AI-powered parsing
+- [ ] Audio playback: Long delay and restarts mid-playback
+
+### Missing Features - High Priority
+- [x] Dr. Sam AI Chat screen with conversational interface
+- [x] Dr. Sam AI personality with full context injection (symptoms, labs, supplements, HFL products)
+- [x] Medications section with full feature set (drug name, dosage, frequency, time, reason, prescriber)
+- [ ] Diet & Eating Plan section with food tracking
+- [ ] Account editing (name, email, password)
+
+### Original App Features to Rebuild
+- [ ] Daily Symptoms Navigation - Today button and calendar date picker with visual indicators
+- [ ] AI Symptom Trend Analysis - "Analyze My Trends" button on symptoms page
+- [ ] Lab Analyzer Links - View previous biomarkers & lab results
+- [ ] Food Scanner / Nutrition page with calorie/macro tracking
+- [x] Smart Insights - Cross-references lab results with optimal ranges
+- [ ] Product Catalog Integration - HFL product recommendations based on user data
+- [ ] Supplement UI - Three-dot menu with Edit, Stop Taking, Delete options
+
+### LLM Strategy (Smart Cost Optimization)
+- [ ] Route different tasks to appropriate LLMs:
+  - Lab PDF Analysis → Gemini (vision)
+  - Food Photo Recognition → Gemini (vision)
+  - Barcode Lookup → Open Food Facts API (free)
+  - Dr. Sam Coaching → OpenAI GPT-4o (best personality)
+  - Simple Q&A → Groq/Llama (ultra cheap)
+
+### AI Chat Enhancements
+- [ ] Voice-to-text/mic input for AI chat
+- [x] Personalized greeting using user's first name
+- [x] Save/share/copy AI conversations
+- [ ] Better AI response quality
+
+### File Upload Enhancements
+- [ ] Drag-and-drop file uploads for biomarkers
+- [ ] Screenshot/image support for blood tests
+- [ ] Barcode/ingredient panel scanning for supplements
+- [ ] Voice-to-text for supplement entry
+
+### Navigation Changes
+- [x] Reorder tabs: Home → Dr. Sam → Symptoms → Labs → Supps → Meds → Insights → Profile (8 tabs)
+
+### Future Features
+- [ ] Workout & Exercise section

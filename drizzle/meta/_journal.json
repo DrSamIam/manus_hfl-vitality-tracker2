@@ -15,6 +15,13 @@
       "when": 1766032905443,
       "tag": "0001_groovy_daredevil",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1768462468963,
+      "tag": "0002_wooden_gargoyle",
+      "breakpoints": true
     }
   ]
 }

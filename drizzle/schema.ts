@@ -147,6 +147,22 @@ export const notificationSettings = mysqlTable("notificationSettings", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+// ========== MEDICATIONS TABLE ==========
+export const medications = mysqlTable("medications", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  drugName: varchar("drugName", { length: 255 }).notNull(),
+  dosage: varchar("dosage", { length: 100 }).notNull(),
+  frequency: mysqlEnum("frequency", ["once_daily", "twice_daily", "three_times_daily", "as_needed", "weekly", "other"]).notNull(),
+  timeOfDay: mysqlEnum("timeOfDay", ["morning", "afternoon", "evening", "bedtime", "with_meals", "multiple"]),
+  reason: varchar("reason", { length: 255 }),
+  prescriber: varchar("prescriber", { length: 255 }),
+  startDate: date("startDate").notNull(),
+  active: boolean("active").default(true).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 // ========== LAB UPLOADS TABLE ==========
 export const labUploads = mysqlTable("labUploads", {
   id: int("id").autoincrement().primaryKey(),
@@ -185,3 +201,6 @@ export type InsertNotificationSettings = typeof notificationSettings.$inferInser
 
 export type LabUpload = typeof labUploads.$inferSelect;
 export type InsertLabUpload = typeof labUploads.$inferInsert;
+
+export type Medication = typeof medications.$inferSelect;
+export type InsertMedication = typeof medications.$inferInsert;

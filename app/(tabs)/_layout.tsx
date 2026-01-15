@@ -21,41 +21,73 @@ export default function TabLayout() {
           paddingBottom: insets.bottom,
           height: 49 + insets.bottom,
         },
+        tabBarLabelStyle: {
+          fontSize: 9,
+        },
       }}
     >
+      {/* Dashboard / Home */}
       <Tabs.Screen
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="house.fill" color={color} />,
         }}
       />
+      {/* Dr. Sam AI Chat */}
       <Tabs.Screen
-        name="biomarkers"
+        name="chat"
         options={{
-          title: "Biomarkers",
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
+          title: "Dr. Sam",
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="stethoscope" color={color} />,
         }}
       />
+      {/* Daily Symptoms */}
       <Tabs.Screen
         name="symptoms"
         options={{
           title: "Symptoms",
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="heart.text.square.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="heart.text.square.fill" color={color} />,
         }}
       />
+      {/* Biomarkers / Labs */}
+      <Tabs.Screen
+        name="biomarkers"
+        options={{
+          title: "Labs",
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="chart.bar.fill" color={color} />,
+        }}
+      />
+      {/* Supplements */}
       <Tabs.Screen
         name="supplements"
         options={{
-          title: "Supplements",
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="pills.fill" color={color} />,
+          title: "Supps",
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="pills.fill" color={color} />,
         }}
       />
+      {/* Medications */}
+      <Tabs.Screen
+        name="medications"
+        options={{
+          title: "Meds",
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="cross.case.fill" color={color} />,
+        }}
+      />
+      {/* Insights */}
+      <Tabs.Screen
+        name="insights"
+        options={{
+          title: "Insights",
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="lightbulb.fill" color={color} />,
+        }}
+      />
+      {/* Profile */}
       <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="person.fill" color={color} />,
         }}
       />
     </Tabs>

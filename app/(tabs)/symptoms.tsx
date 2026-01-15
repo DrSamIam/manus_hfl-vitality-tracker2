@@ -268,7 +268,8 @@ export default function SymptomsScreen() {
               maximumValue={10}
               step={1}
               value={energy}
-              onValueChange={setEnergy}
+              onValueChange={(val) => setEnergy(Math.round(val))}
+              onSlidingComplete={(val) => setEnergy(Math.round(val))}
               minimumTrackTintColor={colors.tint}
               maximumTrackTintColor={colors.border}
               thumbTintColor={colors.tint}
@@ -292,7 +293,8 @@ export default function SymptomsScreen() {
               maximumValue={10}
               step={1}
               value={mood}
-              onValueChange={setMood}
+              onValueChange={(val) => setMood(Math.round(val))}
+              onSlidingComplete={(val) => setMood(Math.round(val))}
               minimumTrackTintColor={colors.tint}
               maximumTrackTintColor={colors.border}
               thumbTintColor={colors.tint}
@@ -316,7 +318,8 @@ export default function SymptomsScreen() {
               maximumValue={10}
               step={1}
               value={sleep}
-              onValueChange={setSleep}
+              onValueChange={(val) => setSleep(Math.round(val))}
+              onSlidingComplete={(val) => setSleep(Math.round(val))}
               minimumTrackTintColor={colors.tint}
               maximumTrackTintColor={colors.border}
               thumbTintColor={colors.tint}
@@ -340,7 +343,8 @@ export default function SymptomsScreen() {
               maximumValue={10}
               step={1}
               value={mentalClarity}
-              onValueChange={setMentalClarity}
+              onValueChange={(val) => setMentalClarity(Math.round(val))}
+              onSlidingComplete={(val) => setMentalClarity(Math.round(val))}
               minimumTrackTintColor={colors.tint}
               maximumTrackTintColor={colors.border}
               thumbTintColor={colors.tint}
@@ -364,7 +368,8 @@ export default function SymptomsScreen() {
               maximumValue={10}
               step={1}
               value={libido}
-              onValueChange={setLibido}
+              onValueChange={(val) => setLibido(Math.round(val))}
+              onSlidingComplete={(val) => setLibido(Math.round(val))}
               minimumTrackTintColor={colors.tint}
               maximumTrackTintColor={colors.border}
               thumbTintColor={colors.tint}
@@ -388,7 +393,8 @@ export default function SymptomsScreen() {
               maximumValue={10}
               step={1}
               value={performanceStamina}
-              onValueChange={setPerformanceStamina}
+              onValueChange={(val) => setPerformanceStamina(Math.round(val))}
+              onSlidingComplete={(val) => setPerformanceStamina(Math.round(val))}
               minimumTrackTintColor={colors.tint}
               maximumTrackTintColor={colors.border}
               thumbTintColor={colors.tint}

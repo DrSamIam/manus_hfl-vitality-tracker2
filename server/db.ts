@@ -4,6 +4,7 @@ import {
   biomarkers,
   insights,
   labUploads,
+  medications,
   menstrualCycles,
   notificationSettings,
   periodSymptoms,
@@ -15,6 +16,7 @@ import {
   type InsertBiomarker,
   type InsertInsight,
   type InsertLabUpload,
+  type InsertMedication,
   type InsertMenstrualCycle,
   type InsertNotificationSettings,
   type InsertPeriodSymptom,
@@ -22,6 +24,7 @@ import {
   type InsertSupplementLog,
   type InsertSymptom,
   type InsertUser,
+  type Medication,
   type MenstrualCycle,
   type NotificationSettings,
   type PeriodSymptom,
@@ -415,4 +418,39 @@ export async function getUserLabUploads(userId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(labUploads).where(eq(labUploads.userId, userId)).orderBy(desc(labUploads.uploadDate));
+}
+
+export async function updateLabUpload(id: number, data: Partial<InsertLabUpload>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(labUploads).set(data).where(eq(labUploads.id, id));
+}
+
+// ========== MEDICATION OPERATIONS ==========
+export async function getUserMedications(userId: number, activeOnly?: boolean) {
+  const db = await getDb();
+  if (!db) return [];
+  if (activeOnly) {
+    return db.select().from(medications).where(and(eq(medications.userId, userId), eq(medications.active, true))).orderBy(desc(medications.createdAt));
+  }
+  return db.select().from(medications).where(eq(medications.userId, userId)).orderBy(desc(medications.createdAt));
+}
+
+export async function createMedication(data: InsertMedication): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(medications).values(data);
+  return result[0].insertId;
+}
+
+export async function updateMedication(id: number, data: Partial<InsertMedication>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(medications).set(data).where(eq(medications.id, id));
+}
+
+export async function deleteMedication(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(medications).where(eq(medications.id, id));
 }
