@@ -13,6 +13,7 @@ import {
   supplements,
   symptoms,
   users,
+  workouts,
   type Biomarker,
   type InsertBiomarker,
   type InsertFoodLog,
@@ -26,6 +27,7 @@ import {
   type InsertSupplementLog,
   type InsertSymptom,
   type InsertUser,
+  type InsertWorkout,
   type Medication,
   type MenstrualCycle,
   type NotificationSettings,
@@ -34,6 +36,7 @@ import {
   type SupplementLog,
   type Symptom,
   type User,
+  type Workout,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -492,4 +495,64 @@ export async function deleteFoodLog(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.delete(foodLogs).where(eq(foodLogs.id, id));
+}
+
+
+// ========== WORKOUT OPERATIONS ==========
+export async function getUserWorkouts(userId: number, limit = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(workouts).where(eq(workouts.userId, userId)).orderBy(desc(workouts.workoutDate)).limit(limit);
+}
+
+export async function getWorkoutsByDateRange(userId: number, startDate: string, endDate: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(workouts).where(
+    and(
+      eq(workouts.userId, userId),
+      gte(workouts.workoutDate, new Date(startDate)),
+      lte(workouts.workoutDate, new Date(endDate))
+    )
+  ).orderBy(desc(workouts.workoutDate));
+}
+
+export async function createWorkout(data: InsertWorkout): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(workouts).values(data);
+  return result[0].insertId;
+}
+
+export async function updateWorkout(id: number, data: Partial<InsertWorkout>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(workouts).set(data).where(eq(workouts.id, id));
+}
+
+export async function deleteWorkout(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(workouts).where(eq(workouts.id, id));
+}
+
+export async function getWeeklyWorkoutStats(userId: number) {
+  const db = await getDb();
+  if (!db) return { totalWorkouts: 0, totalMinutes: 0, totalCalories: 0 };
+  
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+  
+  const weekWorkouts = await db.select().from(workouts).where(
+    and(
+      eq(workouts.userId, userId),
+      gte(workouts.workoutDate, oneWeekAgo)
+    )
+  );
+  
+  return {
+    totalWorkouts: weekWorkouts.length,
+    totalMinutes: weekWorkouts.reduce((sum, w) => sum + (w.durationMinutes || 0), 0),
+    totalCalories: weekWorkouts.reduce((sum, w) => sum + (w.caloriesBurned || 0), 0),
+  };
 }

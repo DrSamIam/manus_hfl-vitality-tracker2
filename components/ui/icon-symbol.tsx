@@ -44,6 +44,8 @@ const MAPPING = {
   "fork.knife": "restaurant",
   "dumbbell.fill": "fitness-center",
   "cross.case.fill": "local-pharmacy",
+  "bag.fill": "shopping-bag",
+  "cart.fill": "shopping-cart",
 } as IconMapping;
 
 /**

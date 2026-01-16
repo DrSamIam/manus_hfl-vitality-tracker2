@@ -236,3 +236,8 @@
 - [x] Text-to-speech for Dr. Sam AI responses (OpenAI TTS integration)
 - [x] Barcode scanning for supplements (Open Food Facts API)
 - [x] AI-powered "Analyze My Trends" button for symptom trend analysis
+
+## V5 Features - Completed
+- [x] HFL Product Catalog with AI-powered recommendations based on user symptoms/labs (12 products from spreadsheet)
+- [x] Workout & Exercise tracking section (strength, cardio, HIIT, yoga, stretching, sports, walking)
+- [x] Comprehensive Health Report export (includes symptoms, biomarkers, medications, supplements, workouts, nutrition)

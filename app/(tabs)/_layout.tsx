@@ -58,6 +58,14 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="fork.knife" color={color} />,
         }}
       />
+      {/* Workouts */}
+      <Tabs.Screen
+        name="workouts"
+        options={{
+          title: "Workouts",
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="dumbbell.fill" color={color} />,
+        }}
+      />
       {/* Biomarkers / Labs */}
       <Tabs.Screen
         name="biomarkers"
@@ -80,6 +88,14 @@ export default function TabLayout() {
         options={{
           title: "Meds",
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="cross.case.fill" color={color} />,
+        }}
+      />
+      {/* HFL Products */}
+      <Tabs.Screen
+        name="products"
+        options={{
+          title: "Shop",
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="bag.fill" color={color} />,
         }}
       />
       {/* Insights */}

@@ -36,6 +36,9 @@ export default function ProfileScreen() {
   const { data: biomarkers } = trpc.biomarkers.list.useQuery(undefined, { enabled: isAuthenticated });
   const { data: symptoms } = trpc.symptoms.list.useQuery({ limit: 100 }, { enabled: isAuthenticated });
   const { data: supplements } = trpc.supplements.list.useQuery({}, { enabled: isAuthenticated });
+  const { data: medications } = trpc.medications.list.useQuery({ activeOnly: false }, { enabled: isAuthenticated });
+  const { data: workouts } = trpc.workouts.list.useQuery({ limit: 30 }, { enabled: isAuthenticated });
+  const { data: foodLogs } = trpc.food.list.useQuery({}, { enabled: isAuthenticated });
 
   const updateProfile = trpc.profile.update.useMutation({
     onSuccess: () => refetchProfile(),
@@ -319,6 +322,7 @@ export default function ProfileScreen() {
             userName={user?.name || "User"}
             biologicalSex={profile.biologicalSex || ""}
             age={profile.age}
+            goals={profile.goals || []}
             symptoms={(symptoms || []).map((s) => ({
               logDate: s.logDate as unknown as string,
               energy: s.energy,
@@ -339,6 +343,30 @@ export default function ProfileScreen() {
               dosage: s.dosage,
               timing: s.timing,
               active: s.active,
+            }))}
+            medications={(medications || []).map((m) => ({
+              drugName: m.drugName,
+              dosage: m.dosage,
+              frequency: m.frequency,
+              reason: m.reason,
+              active: m.active,
+            }))}
+            workouts={(workouts || []).map((w) => ({
+              workoutDate: w.workoutDate as unknown as string,
+              workoutType: w.workoutType,
+              name: w.name,
+              durationMinutes: w.durationMinutes,
+              caloriesBurned: w.caloriesBurned,
+              intensity: w.intensity,
+            }))}
+            foodLogs={(foodLogs || []).map((f) => ({
+              logDate: f.logDate as unknown as string,
+              mealType: f.mealType,
+              totalCalories: f.totalCalories || 0,
+              totalProtein: String(f.totalProtein || 0),
+              totalCarbs: String(f.totalCarbs || 0),
+              totalFat: String(f.totalFat || 0),
+              healthScore: f.healthScore,
             }))}
           />
         </View>

@@ -1064,6 +1064,218 @@ Always end responses with one of these (vary them):
         return { id };
       }),
   }),
+
+  // ========== WORKOUTS ==========
+  workouts: router({
+    list: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        return db.getUserWorkouts(ctx.user.id, input.limit);
+      }),
+    
+    weeklyStats: protectedProcedure
+      .query(async ({ ctx }) => {
+        return db.getWeeklyWorkoutStats(ctx.user.id);
+      }),
+    
+    create: protectedProcedure
+      .input(z.object({
+        workoutDate: z.string(),
+        workoutType: z.enum(["strength", "cardio", "hiit", "yoga", "stretching", "sports", "walking", "other"]),
+        name: z.string().optional(),
+        durationMinutes: z.number().optional(),
+        caloriesBurned: z.number().optional(),
+        intensity: z.enum(["low", "moderate", "high", "very_high"]).optional(),
+        exercises: z.array(z.object({
+          name: z.string(),
+          sets: z.number().optional(),
+          reps: z.number().optional(),
+          weight: z.number().optional(),
+          weightUnit: z.string().optional(),
+          duration: z.number().optional(),
+          distance: z.number().optional(),
+          distanceUnit: z.string().optional(),
+        })).optional(),
+        heartRateAvg: z.number().optional(),
+        heartRateMax: z.number().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await db.createWorkout({
+          userId: ctx.user.id,
+          workoutDate: new Date(input.workoutDate),
+          workoutType: input.workoutType,
+          name: input.name,
+          durationMinutes: input.durationMinutes,
+          caloriesBurned: input.caloriesBurned,
+          intensity: input.intensity,
+          exercises: input.exercises,
+          heartRateAvg: input.heartRateAvg,
+          heartRateMax: input.heartRateMax,
+          notes: input.notes,
+        });
+        return { id };
+      }),
+    
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        workoutType: z.enum(["strength", "cardio", "hiit", "yoga", "stretching", "sports", "walking", "other"]).optional(),
+        name: z.string().optional(),
+        durationMinutes: z.number().optional(),
+        caloriesBurned: z.number().optional(),
+        intensity: z.enum(["low", "moderate", "high", "very_high"]).optional(),
+        exercises: z.array(z.object({
+          name: z.string(),
+          sets: z.number().optional(),
+          reps: z.number().optional(),
+          weight: z.number().optional(),
+          weightUnit: z.string().optional(),
+          duration: z.number().optional(),
+          distance: z.number().optional(),
+          distanceUnit: z.string().optional(),
+        })).optional(),
+        heartRateAvg: z.number().optional(),
+        heartRateMax: z.number().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updateWorkout(id, data);
+        return { success: true };
+      }),
+    
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteWorkout(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ========== HFL PRODUCTS ==========
+  products: router({
+    getRecommendations: protectedProcedure
+      .input(z.object({}).optional())
+      .mutation(async ({ ctx }) => {
+        // Get user profile
+        const profile = await db.getUserProfile(ctx.user.id);
+        
+        // Get recent symptoms (last 30 days)
+        const symptoms = await db.getUserSymptoms(ctx.user.id, 30);
+        
+        // Get biomarkers
+        const biomarkers = await db.getUserBiomarkers(ctx.user.id);
+        
+        // Get current supplements
+        const supplements = await db.getUserSupplements(ctx.user.id, true);
+        
+        // Calculate symptom averages
+        const avgEnergy = symptoms.length > 0 
+          ? symptoms.reduce((sum, s) => sum + (s.energy || 0), 0) / symptoms.length 
+          : 5;
+        const avgMood = symptoms.length > 0 
+          ? symptoms.reduce((sum, s) => sum + (s.mood || 0), 0) / symptoms.length 
+          : 5;
+        const avgSleep = symptoms.length > 0 
+          ? symptoms.reduce((sum, s) => sum + (s.sleep || 0), 0) / symptoms.length 
+          : 5;
+        const avgClarity = symptoms.length > 0 
+          ? symptoms.reduce((sum, s) => sum + (s.mentalClarity || 0), 0) / symptoms.length 
+          : 5;
+        const avgLibido = symptoms.length > 0 
+          ? symptoms.reduce((sum, s) => sum + (s.libido || 0), 0) / symptoms.length 
+          : 5;
+        const avgPerformance = symptoms.length > 0 
+          ? symptoms.reduce((sum, s) => sum + (s.performanceStamina || 0), 0) / symptoms.length 
+          : 5;
+        
+        // Build context for AI
+        const userContext = `
+## User Profile
+- Biological Sex: ${profile?.biologicalSex || "not specified"}
+- Age: ${profile?.age || "not specified"}
+- Goals: ${profile?.goals?.join(", ") || "not specified"}
+
+## Recent Symptom Averages (30 days, ${symptoms.length} days logged)
+- Energy: ${avgEnergy.toFixed(1)}/10
+- Mood: ${avgMood.toFixed(1)}/10
+- Sleep Quality: ${avgSleep.toFixed(1)}/10
+- Mental Clarity: ${avgClarity.toFixed(1)}/10
+- Libido: ${avgLibido.toFixed(1)}/10
+- Physical Performance: ${avgPerformance.toFixed(1)}/10
+
+## Recent Biomarkers
+${biomarkers.slice(0, 10).map(b => `- ${b.markerName}: ${b.value} ${b.unit}`).join("\n") || "No biomarkers recorded"}
+
+## Current Supplements
+${supplements.map(s => `- ${s.name} (${s.dosage})`).join("\n") || "No supplements"}
+`;
+        
+        // Use AI to generate personalized recommendations
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are Dr. Sam, a health and wellness expert specializing in hormone optimization and vitality.
+
+Based on the user's health data, recommend the most relevant HFL products from this catalog:
+
+1. AlphaViril (id: alphaviril) - Testosterone & hormone optimization for men. For: low libido, erectile issues, low energy, weak muscles.
+2. Body-Brain Energy (id: body-brain-energy) - Energy, focus, memory, nootropic. For: fatigue, brain fog, low drive, ADHD.
+3. Blood Flow Optimizer (id: blood-flow-optimizer) - Circulation, nitric oxide. For: cold hands/feet, erectile issues, poor focus.
+4. Blood Pressure Optimizer (id: blood-pressure-optimizer) - Blood pressure, heart health. For: high BP, headaches.
+5. Blood Sugar Optimizer (id: blood-sugar-optimizer) - Blood sugar, insulin. For: high blood sugar, fatigue, weight gain.
+6. Cholesterol Optimizer (id: cholesterol-optimizer) - Cholesterol, HDL/LDL. For: high cholesterol, triglycerides.
+7. Deep Sleep Formula (id: deep-sleep-formula) - Sleep quality. For: insomnia, poor sleep, fatigue.
+8. Inflame & Pain Relief (id: inflame-pain-relief) - Inflammation, pain, joints. For: pain, low flexibility, gut issues.
+9. Lean Optimizer (id: lean-optimizer) - Weight loss, metabolism. For: slow metabolism, weight gain, sugar cravings.
+10. Perfect Vitamin D3 + K2 (id: perfect-vitamin-d3-k2) - Vitamin D, immune, energy. For: fatigue, low immune, low testosterone.
+11. ProVanax (id: provanax) - Mood, anxiety, happiness. For: anxiety, stress, poor sleep, mood swings.
+12. Stress & Cortisol Relief (id: stress-cortisol-relief) - Stress, cortisol, adrenals. For: stress, poor sleep, fat gain, anxiety.
+
+Provide:
+1. A brief personalized analysis (2-3 sentences) of their health data
+2. Top 3-5 product recommendations with specific reasons based on their data
+
+Respond in JSON format:
+{
+  "analysis": "Your personalized analysis here...",
+  "recommendations": [
+    { "productId": "product-id", "reason": "Why this product is recommended based on their data" }
+  ]
+}`,
+            },
+            {
+              role: "user",
+              content: `Based on my health data, what HFL products would you recommend?\n${userContext}`,
+            },
+          ],
+        });
+        
+        const rawContent = response.choices[0]?.message?.content;
+        const content = typeof rawContent === 'string' ? rawContent : '{}';
+        
+        try {
+          // Extract JSON from response
+          const jsonMatch = content.match(/\{[\s\S]*\}/);
+          if (!jsonMatch) {
+            throw new Error("No JSON found in response");
+          }
+          return JSON.parse(jsonMatch[0]);
+        } catch (e) {
+          console.error("Failed to parse product recommendations:", e);
+          return {
+            analysis: "Based on your health profile, here are some general recommendations.",
+            recommendations: [
+              { productId: "body-brain-energy", reason: "Great for overall energy and mental clarity" },
+              { productId: "perfect-vitamin-d3-k2", reason: "Essential for immune health and energy" },
+              { productId: "deep-sleep-formula", reason: "Quality sleep is foundational for all health goals" },
+            ],
+          };
+        }
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
