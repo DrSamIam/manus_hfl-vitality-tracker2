@@ -96,6 +96,20 @@ export const appRouter = router({
         await db.updateUserProfile(ctx.user.id, input);
         return { success: true };
       }),
+    
+    updateFitnessPreferences: protectedProcedure
+      .input(z.object({
+        fitnessGoal: z.enum(["build_muscle", "lose_fat", "improve_energy", "reduce_stress", "general_fitness", "increase_strength"]).optional(),
+        fitnessExperience: z.enum(["beginner", "intermediate", "advanced"]).optional(),
+        availableEquipment: z.array(z.string()).optional(),
+        workoutFrequency: z.enum(["2_3_per_week", "4_5_per_week", "6_7_per_week"]).optional(),
+        preferredWorkoutDuration: z.enum(["15_30_min", "30_45_min", "45_60_min", "60_plus_min"]).optional(),
+        fitnessOnboardingCompleted: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.updateUserProfile(ctx.user.id, input);
+        return { success: true };
+      }),
   }),
 
   // ========== BIOMARKERS ==========
@@ -1150,6 +1164,126 @@ Always end responses with one of these (vary them):
       .mutation(async ({ input }) => {
         await db.deleteWorkout(input.id);
         return { success: true };
+      }),
+    
+    getAIRecommendation: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        // Get user profile with fitness preferences
+        const profile = await db.getUserProfile(ctx.user.id);
+        
+        // Get recent symptoms (last 7 days)
+        const symptoms = await db.getUserSymptoms(ctx.user.id, 7);
+        
+        // Get recent workouts (last 14 days)
+        const recentWorkouts = await db.getUserWorkouts(ctx.user.id, 14);
+        
+        // Get current supplements
+        const supplements = await db.getUserSupplements(ctx.user.id, true);
+        
+        // Calculate symptom averages
+        const avgEnergy = symptoms.length > 0 
+          ? symptoms.reduce((sum, s) => sum + (s.energy || 5), 0) / symptoms.length 
+          : 5;
+        const avgMood = symptoms.length > 0 
+          ? symptoms.reduce((sum, s) => sum + (s.mood || 5), 0) / symptoms.length 
+          : 5;
+        const avgSleep = symptoms.length > 0 
+          ? symptoms.reduce((sum, s) => sum + (s.sleep || 5), 0) / symptoms.length 
+          : 5;
+        
+        // Build context for AI
+        const userContext = `
+## User Fitness Profile
+- Biological Sex: ${profile?.biologicalSex || "not specified"}
+- Age: ${profile?.age || "not specified"}
+- Fitness Goal: ${profile?.fitnessGoal?.replace(/_/g, " ") || "general fitness"}
+- Experience Level: ${profile?.fitnessExperience || "beginner"}
+- Available Equipment: ${profile?.availableEquipment?.join(", ") || "bodyweight"}
+- Preferred Workout Duration: ${profile?.preferredWorkoutDuration?.replace(/_/g, " ") || "30-45 min"}
+
+## Recent Health Data (7 days)
+- Average Energy: ${avgEnergy.toFixed(1)}/10
+- Average Mood: ${avgMood.toFixed(1)}/10
+- Average Sleep Quality: ${avgSleep.toFixed(1)}/10
+
+## Recent Workout Activity (14 days)
+- Total Workouts: ${recentWorkouts.length}
+- Workout Types: ${[...new Set(recentWorkouts.map(w => w.workoutType))].join(", ") || "none"}
+
+## Current Supplements
+${supplements.map(s => `- ${s.name}`).join("\n") || "None"}
+`;
+
+        const systemPrompt = `You are Dr. Sam, a fitness and wellness expert. Based on the user's profile, recent health data, and workout history, provide a personalized workout recommendation for today.
+
+Consider:
+1. Their energy levels - if low, suggest lighter workouts
+2. Their sleep quality - poor sleep means recovery-focused workouts
+3. Their fitness goal and experience level
+4. Available equipment
+5. Recent workout history to avoid overtraining
+6. Any supplements they're taking that might affect workout performance
+
+Respond in JSON format:
+{
+  "recommendation": "Brief explanation of why this workout is recommended today",
+  "suggestedWorkout": {
+    "name": "Workout name",
+    "type": "strength|cardio|hiit|yoga|mobility|circuit",
+    "duration": number (minutes),
+    "intensity": "low|moderate|high",
+    "exercises": [
+      {
+        "name": "Exercise name",
+        "sets": number,
+        "reps": "number or duration (e.g., '12' or '30 sec')",
+        "notes": "Optional form tips"
+      }
+    ]
+  },
+  "alternativeOption": "Brief description of an alternative if they're not feeling up to the main recommendation",
+  "productTip": "Optional: If relevant, mention an HFL product that could help (AlphaViril, Body-Brain Energy, Deep Sleep Formula, etc.)"
+}
+
+Be encouraging and supportive. Focus on what they CAN do, not limitations.`;
+
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userContext },
+          ],
+        });
+        
+        try {
+          const content = response.choices[0]?.message?.content;
+          if (!content || typeof content !== "string") {
+            throw new Error("No response from AI");
+          }
+          const jsonMatch = content.match(/\{[\s\S]*\}/);
+          if (!jsonMatch) {
+            throw new Error("No JSON found in response");
+          }
+          return JSON.parse(jsonMatch[0]);
+        } catch (e) {
+          console.error("Failed to parse workout recommendation:", e);
+          // Return a fallback recommendation
+          return {
+            recommendation: "Based on your profile, here's a balanced workout to keep you moving today.",
+            suggestedWorkout: {
+              name: "Full Body Basics",
+              type: "strength",
+              duration: 30,
+              intensity: "moderate",
+              exercises: [
+                { name: "Bodyweight Squats", sets: 3, reps: "12", notes: "Keep chest up" },
+                { name: "Push-ups", sets: 3, reps: "10", notes: "Modify on knees if needed" },
+                { name: "Plank", sets: 3, reps: "30 sec", notes: "Keep core tight" },
+                { name: "Lunges", sets: 3, reps: "10 each leg", notes: "Step forward, not out" },
+              ],
+            },
+            alternativeOption: "If you're feeling tired, try a 15-minute walk or gentle stretching instead.",
+          };
+        }
       }),
   }),
 

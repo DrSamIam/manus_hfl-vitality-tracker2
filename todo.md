@@ -244,3 +244,12 @@
 
 ## V6 Features - Completed
 - [x] Add product purchase links to HFL website product pages (with UTM tracking)
+
+## V7 Features - Enhanced Workout System - Completed
+- [x] Create exercise library with muscle groups, equipment, difficulty (50+ exercises)
+- [x] Create pre-built workout templates (10 templates: Morning Energy, Fat Burning, Strength Foundation, etc.)
+- [x] Add fitness preferences to user profile (goal, experience, equipment, frequency, duration)
+- [x] Add fitness onboarding flow for new users
+- [x] Enhance workouts screen with template browser and filtering
+- [x] Add guided workout mode with rest timers and set tracking
+- [x] Integrate Dr. Sam AI for smart workout recommendations based on symptoms/energy/sleep

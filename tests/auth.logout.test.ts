@@ -31,6 +31,12 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
     cycleTrackingEnabled: false,
     premiumStatus: false,
     onboardingCompleted: false,
+    fitnessGoal: null,
+    fitnessExperience: null,
+    availableEquipment: null,
+    workoutFrequency: null,
+    preferredWorkoutDuration: null,
+    fitnessOnboardingCompleted: false,
   };
 
   const ctx: TrpcContext = {

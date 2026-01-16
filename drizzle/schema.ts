@@ -41,6 +41,14 @@ export const users = mysqlTable("users", {
   cycleTrackingEnabled: boolean("cycleTrackingEnabled").default(false),
   premiumStatus: boolean("premiumStatus").default(false),
   onboardingCompleted: boolean("onboardingCompleted").default(false),
+  
+  // Fitness preferences
+  fitnessGoal: mysqlEnum("fitnessGoal", ["build_muscle", "lose_fat", "improve_energy", "reduce_stress", "general_fitness", "increase_strength"]),
+  fitnessExperience: mysqlEnum("fitnessExperience", ["beginner", "intermediate", "advanced"]),
+  availableEquipment: json("availableEquipment").$type<string[]>(), // Array of equipment types
+  workoutFrequency: mysqlEnum("workoutFrequency", ["2_3_per_week", "4_5_per_week", "6_7_per_week"]),
+  preferredWorkoutDuration: mysqlEnum("preferredWorkoutDuration", ["15_30_min", "30_45_min", "45_60_min", "60_plus_min"]),
+  fitnessOnboardingCompleted: boolean("fitnessOnboardingCompleted").default(false),
 });
 
 export type User = typeof users.$inferSelect;
