@@ -231,3 +231,8 @@
 
 ### Future Features
 - [ ] Workout & Exercise section
+
+## V4 Features - Completed
+- [x] Text-to-speech for Dr. Sam AI responses (OpenAI TTS integration)
+- [x] Barcode scanning for supplements (Open Food Facts API)
+- [x] AI-powered "Analyze My Trends" button for symptom trend analysis

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BarcodeScanner } from "@/components/barcode-scanner";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
@@ -34,6 +35,7 @@ export default function SupplementsScreen() {
   const today = new Date().toISOString().split("T")[0];
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [name, setName] = useState("");
   const [dosage, setDosage] = useState("");
   const [timing, setTiming] = useState<typeof TIMING_OPTIONS[number]["value"]>("morning");
@@ -84,6 +86,30 @@ export default function SupplementsScreen() {
       startDate: today,
       notes: notes || undefined,
     });
+  };
+
+  const handleProductFound = (product: { name: string; brand: string; ingredients?: string; servingSize?: string }) => {
+    // Pre-fill the form with scanned product info
+    const productName = product.brand 
+      ? `${product.brand} ${product.name}`.trim()
+      : product.name;
+    
+    setName(productName);
+    
+    // Try to extract dosage from serving size
+    if (product.servingSize) {
+      setDosage(product.servingSize);
+    }
+    
+    // Add ingredients to notes if available
+    if (product.ingredients) {
+      const truncatedIngredients = product.ingredients.length > 200 
+        ? product.ingredients.substring(0, 200) + "..."
+        : product.ingredients;
+      setNotes(`Ingredients: ${truncatedIngredients}`);
+    }
+    
+    setShowAddModal(true);
   };
 
   const handleToggleLog = async (supplementId: number, period: "am" | "pm") => {
@@ -179,19 +205,34 @@ export default function SupplementsScreen() {
           </View>
         )}
 
-        {/* Add Button */}
-        <Pressable
-          onPress={() => setShowAddModal(true)}
-          style={({ pressed }) => [
-            styles.addButton,
-            { backgroundColor: colors.tint },
-            pressed && styles.buttonPressed,
-          ]}
-        >
-          <ThemedText type="defaultSemiBold" style={styles.addButtonText}>
-            + Add Supplement
-          </ThemedText>
-        </Pressable>
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          <Pressable
+            onPress={() => setShowAddModal(true)}
+            style={({ pressed }) => [
+              styles.addButton,
+              { backgroundColor: colors.tint, flex: 1 },
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <ThemedText type="defaultSemiBold" style={styles.addButtonText}>
+              + Add Manually
+            </ThemedText>
+          </Pressable>
+          
+          <Pressable
+            onPress={() => setShowBarcodeScanner(true)}
+            style={({ pressed }) => [
+              styles.addButton,
+              { backgroundColor: colors.surface, flex: 1, borderWidth: 1, borderColor: colors.tint },
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <ThemedText type="defaultSemiBold" style={{ color: colors.tint, fontSize: 16 }}>
+              📷 Scan Barcode
+            </ThemedText>
+          </Pressable>
+        </View>
 
         {/* Active Supplements */}
         {isLoading ? (
@@ -269,7 +310,7 @@ export default function SupplementsScreen() {
               No Supplements Yet
             </ThemedText>
             <ThemedText style={[styles.emptyText, { color: colors.textSecondary }]}>
-              Add your supplements to track adherence and see how they affect your health over time.
+              Add your supplements manually or scan a barcode to auto-fill product details.
             </ThemedText>
           </View>
         )}
@@ -312,6 +353,13 @@ export default function SupplementsScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Barcode Scanner */}
+      <BarcodeScanner
+        visible={showBarcodeScanner}
+        onClose={() => setShowBarcodeScanner(false)}
+        onProductFound={handleProductFound}
+      />
 
       {/* Add Supplement Modal */}
       <Modal visible={showAddModal} animationType="slide" transparent>
@@ -432,7 +480,8 @@ const styles = StyleSheet.create({
   progressHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   progressBar: { height: 8, borderRadius: 4, overflow: "hidden" },
   progressFill: { height: "100%", borderRadius: 4 },
-  addButton: { paddingVertical: 14, borderRadius: 12, alignItems: "center", marginBottom: 24 },
+  actionButtons: { flexDirection: "row", gap: 12, marginBottom: 24 },
+  addButton: { paddingVertical: 14, borderRadius: 12, alignItems: "center" },
   buttonPressed: { opacity: 0.8 },
   addButtonText: { color: "#FFFFFF", fontSize: 16 },
   section: { marginBottom: 24 },

@@ -5,6 +5,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { transcribeAudio } from "./_core/voiceTranscription";
+import { textToSpeech, TTSVoice } from "./_core/textToSpeech";
 import { storagePut } from "./storage";
 import * as db from "./db";
 
@@ -27,7 +28,7 @@ export const appRouter = router({
       }),
   }),
   
-  // ========== VOICE TRANSCRIPTION ==========
+  // ========== VOICE TRANSCRIPTION & TEXT-TO-SPEECH ==========
   voice: router({
     transcribe: protectedProcedure
       .input(z.object({
@@ -37,6 +38,26 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const result = await transcribeAudio(input);
+        
+        if ('error' in result) {
+          throw new Error(result.error);
+        }
+        
+        return result;
+      }),
+    
+    textToSpeech: protectedProcedure
+      .input(z.object({
+        text: z.string().min(1).max(4096),
+        voice: z.enum(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]).optional(),
+        speed: z.number().min(0.25).max(4.0).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await textToSpeech({
+          text: input.text,
+          voice: input.voice as TTSVoice,
+          speed: input.speed,
+        });
         
         if ('error' in result) {
           throw new Error(result.error);
@@ -328,6 +349,114 @@ Only include biomarkers you can clearly identify with their values. If you canno
       .mutation(async ({ input }) => {
         await db.deleteSymptom(input.id);
         return { success: true };
+      }),
+    
+    analyzeTrends: protectedProcedure
+      .input(z.object({
+        days: z.number().min(7).max(90).default(30),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Get symptoms for the specified period
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - input.days);
+        
+        const symptoms = await db.getSymptomsInRange(
+          ctx.user.id,
+          startDate.toISOString().split("T")[0],
+          endDate.toISOString().split("T")[0]
+        );
+        
+        if (!symptoms || symptoms.length < 3) {
+          return {
+            analysis: "Not enough data to analyze trends. Please log at least 3 days of symptoms to get personalized insights.",
+            dataPoints: symptoms?.length || 0,
+          };
+        }
+        
+        // Get user profile for context
+        const profile = await db.getUserProfile(ctx.user.id);
+        
+        // Get supplements for context
+        const supplements = await db.getUserSupplements(ctx.user.id);
+        const activeSupplements = supplements?.filter(s => s.active) || [];
+        
+        // Calculate averages and trends
+        const avgEnergy = symptoms.reduce((sum, s) => sum + (s.energy || 0), 0) / symptoms.length;
+        const avgMood = symptoms.reduce((sum, s) => sum + (s.mood || 0), 0) / symptoms.length;
+        const avgSleep = symptoms.reduce((sum, s) => sum + (s.sleep || 0), 0) / symptoms.length;
+        const avgClarity = symptoms.reduce((sum, s) => sum + (s.mentalClarity || 0), 0) / symptoms.length;
+        const avgLibido = symptoms.reduce((sum, s) => sum + (s.libido || 0), 0) / symptoms.length;
+        const avgPerformance = symptoms.reduce((sum, s) => sum + (s.performanceStamina || 0), 0) / symptoms.length;
+        
+        // Calculate week-over-week trends
+        const midpoint = Math.floor(symptoms.length / 2);
+        const firstHalf = symptoms.slice(0, midpoint);
+        const secondHalf = symptoms.slice(midpoint);
+        
+        const firstHalfAvg = firstHalf.reduce((sum, s) => sum + ((s.energy || 0) + (s.mood || 0) + (s.sleep || 0)) / 3, 0) / firstHalf.length;
+        const secondHalfAvg = secondHalf.reduce((sum, s) => sum + ((s.energy || 0) + (s.mood || 0) + (s.sleep || 0)) / 3, 0) / secondHalf.length;
+        const trendDirection = secondHalfAvg > firstHalfAvg ? "improving" : secondHalfAvg < firstHalfAvg ? "declining" : "stable";
+        
+        // Use AI to generate personalized insights
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are Dr. Sam, a health and wellness AI assistant specializing in hormone optimization and vitality. 
+Analyze the user's symptom trends and provide actionable, personalized insights.
+
+Be specific, supportive, and practical. Focus on:
+1. Key patterns you notice in their data
+2. Correlations between different symptoms
+3. Specific recommendations based on their trends
+4. Encouragement for positive trends or gentle guidance for areas needing attention
+
+Keep your response concise (3-4 paragraphs) and conversational. Use their actual numbers when relevant.`,
+            },
+            {
+              role: "user",
+              content: `Please analyze my symptom trends for the past ${input.days} days:
+
+**Data Summary (${symptoms.length} days logged):**
+- Energy: ${avgEnergy.toFixed(1)}/10 average
+- Mood: ${avgMood.toFixed(1)}/10 average  
+- Sleep Quality: ${avgSleep.toFixed(1)}/10 average
+- Mental Clarity: ${avgClarity.toFixed(1)}/10 average
+- Libido: ${avgLibido.toFixed(1)}/10 average
+- Physical Performance: ${avgPerformance.toFixed(1)}/10 average
+
+**Overall Trend:** ${trendDirection}
+
+**User Context:**
+- Biological Sex: ${profile?.biologicalSex || "not specified"}
+- Age: ${profile?.age || "not specified"}
+- Goals: ${profile?.goals?.join(", ") || "not specified"}
+- Current Supplements: ${activeSupplements.length > 0 ? activeSupplements.map(s => s.name).join(", ") : "none"}
+
+**Recent Notes from logs:**
+${symptoms.slice(0, 5).filter(s => s.notes).map(s => `- ${s.notes}`).join("\n") || "No notes recorded"}
+
+Please provide personalized insights and recommendations based on this data.`,
+            },
+          ],
+        });
+        
+        const analysis = response.choices[0]?.message?.content || "Unable to generate analysis at this time.";
+        
+        return {
+          analysis,
+          dataPoints: symptoms.length,
+          averages: {
+            energy: avgEnergy,
+            mood: avgMood,
+            sleep: avgSleep,
+            mentalClarity: avgClarity,
+            libido: avgLibido,
+            performanceStamina: avgPerformance,
+          },
+          trend: trendDirection,
+        };
       }),
   }),
 

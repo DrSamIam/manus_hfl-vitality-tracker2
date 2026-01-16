@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Audio } from "expo-av";
 import * as Clipboard from "expo-clipboard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -39,6 +40,9 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
+  const [loadingTTSId, setLoadingTTSId] = useState<string | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   const { data: profile } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
   const { data: symptoms } = trpc.symptoms.list.useQuery({ limit: 7 }, { enabled: isAuthenticated });
@@ -46,9 +50,19 @@ export default function ChatScreen() {
   const { data: supplements } = trpc.supplements.list.useQuery({}, { enabled: isAuthenticated });
 
   const chatMutation = trpc.chat.send.useMutation();
+  const ttsMutation = trpc.voice.textToSpeech.useMutation();
 
   // Get user's first name for personalized greeting
   const firstName = user?.name?.split(" ")[0] || "there";
+
+  // Cleanup sound on unmount
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync();
+      }
+    };
+  }, []);
 
   // Generate initial greeting
   useEffect(() => {
@@ -74,7 +88,6 @@ export default function ChatScreen() {
 
     let contextInfo = "";
     if (symptoms && symptoms.length > 0) {
-      const latestSymptom = symptoms[0];
       const avgEnergy = symptoms.reduce((sum, s) => sum + (s.energy || 0), 0) / symptoms.length;
       contextInfo = ` I see you've been tracking your symptoms. Your average energy level this week is ${avgEnergy.toFixed(1)}/10.`;
     }
@@ -96,6 +109,86 @@ I'm Dr. Sam, your personal health AI assistant. I'm here to help you understand 
 
 How can I help you today?`;
   };
+
+  // Text-to-speech handler
+  const handlePlayTTS = useCallback(async (message: Message) => {
+    try {
+      // If already playing this message, stop it
+      if (playingMessageId === message.id) {
+        if (soundRef.current) {
+          await soundRef.current.stopAsync();
+          await soundRef.current.unloadAsync();
+          soundRef.current = null;
+        }
+        setPlayingMessageId(null);
+        return;
+      }
+
+      // Stop any currently playing audio
+      if (soundRef.current) {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      }
+
+      setLoadingTTSId(message.id);
+
+      // Clean the message content for TTS (remove emojis)
+      const cleanText = message.content
+        .replace(/[\u{1F600}-\u{1F64F}]/gu, "") // emoticons
+        .replace(/[\u{1F300}-\u{1F5FF}]/gu, "") // symbols & pictographs
+        .replace(/[\u{1F680}-\u{1F6FF}]/gu, "") // transport & map symbols
+        .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, "") // flags
+        .replace(/[\u{2600}-\u{26FF}]/gu, "")   // misc symbols
+        .replace(/[\u{2700}-\u{27BF}]/gu, "")   // dingbats
+        .trim();
+
+      if (!cleanText) {
+        Alert.alert("Error", "No text to speak");
+        setLoadingTTSId(null);
+        return;
+      }
+
+      // Truncate if too long
+      const textToSpeak = cleanText.length > 4000 ? cleanText.substring(0, 4000) + "..." : cleanText;
+
+      const result = await ttsMutation.mutateAsync({
+        text: textToSpeak,
+        voice: "nova", // Friendly, warm voice for Dr. Sam
+        speed: 1.0,
+      });
+
+      // Enable audio playback
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+      });
+
+      // Create and play the sound
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: result.audioUrl },
+        { shouldPlay: true }
+      );
+
+      soundRef.current = sound;
+      setPlayingMessageId(message.id);
+      setLoadingTTSId(null);
+
+      // Listen for playback status
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setPlayingMessageId(null);
+          sound.unloadAsync();
+          soundRef.current = null;
+        }
+      });
+    } catch (error: any) {
+      console.error("TTS error:", error);
+      setLoadingTTSId(null);
+      setPlayingMessageId(null);
+      Alert.alert("Error", "Failed to play audio. Please try again.");
+    }
+  }, [playingMessageId, ttsMutation]);
 
   const handleSend = useCallback(async () => {
     if (!inputText.trim() || isLoading) return;
@@ -187,6 +280,9 @@ How can I help you today?`;
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isUser = item.role === "user";
+    const isPlaying = playingMessageId === item.id;
+    const isLoadingTTS = loadingTTSId === item.id;
+
     return (
       <View
         style={[
@@ -210,6 +306,27 @@ How can I help you today?`;
           >
             {item.content}
           </ThemedText>
+
+          {/* TTS Button for assistant messages */}
+          {!isUser && (
+            <Pressable
+              onPress={() => handlePlayTTS(item)}
+              disabled={isLoadingTTS}
+              style={({ pressed }) => [
+                styles.ttsButton,
+                { backgroundColor: isPlaying ? colors.tint : colors.background },
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              {isLoadingTTS ? (
+                <ActivityIndicator size="small" color={colors.tint} />
+              ) : (
+                <ThemedText style={{ fontSize: 14 }}>
+                  {isPlaying ? "⏹️" : "🔊"}
+                </ThemedText>
+              )}
+            </Pressable>
+          )}
         </View>
         <ThemedText style={[styles.timestamp, { color: colors.textSecondary }]}>
           {item.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -414,12 +531,14 @@ const styles = StyleSheet.create({
     maxWidth: "85%",
     padding: 12,
     borderRadius: 16,
+    position: "relative",
   },
   userBubble: {
     borderBottomRightRadius: 4,
   },
   assistantBubble: {
     borderBottomLeftRadius: 4,
+    paddingBottom: 36, // Extra space for TTS button
   },
   messageText: {
     fontSize: 16,
@@ -427,6 +546,16 @@ const styles = StyleSheet.create({
   },
   userMessageText: { color: "#FFFFFF" },
   timestamp: { fontSize: 11, marginTop: 4, marginHorizontal: 4 },
+  ttsButton: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   loadingContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -450,7 +579,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     maxHeight: 120,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 22,
     borderWidth: 1,
     fontSize: 16,
@@ -462,6 +591,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  sendButtonText: { fontSize: 20, fontWeight: "600" },
-  buttonPressed: { opacity: 0.8 },
+  sendButtonText: {
+    fontSize: 20,
+    fontWeight: "bold",
+  },
+  buttonPressed: {
+    opacity: 0.7,
+  },
 });

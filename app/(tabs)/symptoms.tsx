@@ -3,6 +3,7 @@ import { useState } from "react";
 import { SymptomCalendar } from "@/components/symptom-calendar";
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -67,6 +68,10 @@ export default function SymptomsScreen() {
   });
 
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showTrendAnalysis, setShowTrendAnalysis] = useState(false);
+  const [trendDays, setTrendDays] = useState(30);
+  
+  const analyzeTrends = trpc.symptoms.analyzeTrends.useMutation();
 
   const createSymptom = trpc.symptoms.create.useMutation({
     onSuccess: () => refetch(),
@@ -136,16 +141,30 @@ export default function SymptomsScreen() {
             </ThemedText>
           </View>
 
-          {/* Calendar Toggle */}
-          <Pressable
-            onPress={() => setShowCalendar(!showCalendar)}
-            style={[styles.calendarToggle, { backgroundColor: colors.surface }]}
-          >
-            <ThemedText style={{ fontSize: 20 }}>📅</ThemedText>
-            <ThemedText type="defaultSemiBold">
-              {showCalendar ? "Hide Calendar" : "View Calendar"}
-            </ThemedText>
-          </Pressable>
+          {/* Action Buttons Row */}
+          <View style={styles.actionRow}>
+            {/* Calendar Toggle */}
+            <Pressable
+              onPress={() => setShowCalendar(!showCalendar)}
+              style={[styles.calendarToggle, { backgroundColor: colors.surface, flex: 1 }]}
+            >
+              <ThemedText style={{ fontSize: 20 }}>📅</ThemedText>
+              <ThemedText type="defaultSemiBold" style={{ fontSize: 14 }}>
+                {showCalendar ? "Hide" : "Calendar"}
+              </ThemedText>
+            </Pressable>
+            
+            {/* Analyze Trends Button */}
+            <Pressable
+              onPress={() => setShowTrendAnalysis(true)}
+              style={[styles.calendarToggle, { backgroundColor: colors.tint, flex: 1 }]}
+            >
+              <ThemedText style={{ fontSize: 20 }}>📊</ThemedText>
+              <ThemedText type="defaultSemiBold" style={{ fontSize: 14, color: "#FFFFFF" }}>
+                Analyze Trends
+              </ThemedText>
+            </Pressable>
+          </View>
 
           {/* Calendar View */}
           {showCalendar && allSymptoms && (
@@ -517,6 +536,149 @@ export default function SymptomsScreen() {
           )}
         </Pressable>
       </ScrollView>
+      
+      {/* Trend Analysis Modal */}
+      <Modal visible={showTrendAnalysis} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <ThemedText type="subtitle">Analyze My Trends</ThemedText>
+              <Pressable onPress={() => { setShowTrendAnalysis(false); analyzeTrends.reset(); }}>
+                <ThemedText style={{ color: colors.tint, fontSize: 16 }}>Close</ThemedText>
+              </Pressable>
+            </View>
+            
+            <ScrollView style={styles.modalScroll}>
+              {/* Period Selector */}
+              <ThemedText type="defaultSemiBold" style={{ marginBottom: 12 }}>Time Period</ThemedText>
+              <View style={styles.periodSelector}>
+                {[7, 14, 30, 60, 90].map((days) => (
+                  <Pressable
+                    key={days}
+                    onPress={() => setTrendDays(days)}
+                    style={[
+                      styles.periodOption,
+                      {
+                        backgroundColor: trendDays === days ? colors.tint : colors.surface,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <ThemedText
+                      style={{
+                        color: trendDays === days ? "#FFFFFF" : colors.text,
+                        fontSize: 13,
+                        fontWeight: "600",
+                      }}
+                    >
+                      {days}d
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+              
+              {/* Analyze Button */}
+              <Pressable
+                onPress={() => analyzeTrends.mutate({ days: trendDays })}
+                disabled={analyzeTrends.isPending}
+                style={[
+                  styles.analyzeButton,
+                  { backgroundColor: analyzeTrends.isPending ? colors.surface : colors.tint },
+                ]}
+              >
+                {analyzeTrends.isPending ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <ActivityIndicator color="#FFFFFF" />
+                    <ThemedText style={{ color: "#FFFFFF", fontWeight: "600" }}>
+                      Analyzing your data...
+                    </ThemedText>
+                  </View>
+                ) : (
+                  <ThemedText style={{ color: "#FFFFFF", fontWeight: "600", fontSize: 16 }}>
+                    Generate AI Analysis
+                  </ThemedText>
+                )}
+              </Pressable>
+              
+              {/* Results */}
+              {analyzeTrends.data && (
+                <>
+                  {/* Stats Grid */}
+                  {analyzeTrends.data.averages && (
+                    <View style={[styles.analysisCard, { backgroundColor: colors.surface }]}>
+                      <ThemedText type="defaultSemiBold" style={{ marginBottom: 16 }}>
+                        {trendDays}-Day Averages ({analyzeTrends.data.dataPoints} days logged)
+                      </ThemedText>
+                      <View style={styles.statsGrid}>
+                        <View style={[styles.statCard, { backgroundColor: colors.background }]}>
+                          <ThemedText style={{ fontSize: 24 }}>⚡</ThemedText>
+                          <ThemedText type="defaultSemiBold" style={{ color: colors.tint }}>
+                            {analyzeTrends.data.averages.energy.toFixed(1)}
+                          </ThemedText>
+                          <ThemedText style={{ color: colors.textSecondary, fontSize: 12 }}>Energy</ThemedText>
+                        </View>
+                        <View style={[styles.statCard, { backgroundColor: colors.background }]}>
+                          <ThemedText style={{ fontSize: 24 }}>😊</ThemedText>
+                          <ThemedText type="defaultSemiBold" style={{ color: colors.tint }}>
+                            {analyzeTrends.data.averages.mood.toFixed(1)}
+                          </ThemedText>
+                          <ThemedText style={{ color: colors.textSecondary, fontSize: 12 }}>Mood</ThemedText>
+                        </View>
+                        <View style={[styles.statCard, { backgroundColor: colors.background }]}>
+                          <ThemedText style={{ fontSize: 24 }}>😴</ThemedText>
+                          <ThemedText type="defaultSemiBold" style={{ color: colors.tint }}>
+                            {analyzeTrends.data.averages.sleep.toFixed(1)}
+                          </ThemedText>
+                          <ThemedText style={{ color: colors.textSecondary, fontSize: 12 }}>Sleep</ThemedText>
+                        </View>
+                        <View style={[styles.statCard, { backgroundColor: colors.background }]}>
+                          <ThemedText style={{ fontSize: 24 }}>🧠</ThemedText>
+                          <ThemedText type="defaultSemiBold" style={{ color: colors.tint }}>
+                            {analyzeTrends.data.averages.mentalClarity.toFixed(1)}
+                          </ThemedText>
+                          <ThemedText style={{ color: colors.textSecondary, fontSize: 12 }}>Clarity</ThemedText>
+                        </View>
+                      </View>
+                      
+                      {/* Trend Indicator */}
+                      {analyzeTrends.data.trend && (
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 8 }}>
+                          <ThemedText style={{ fontSize: 20 }}>
+                            {analyzeTrends.data.trend === "improving" ? "📈" : analyzeTrends.data.trend === "declining" ? "📉" : "➡️"}
+                          </ThemedText>
+                          <ThemedText style={{ color: colors.textSecondary, textTransform: "capitalize" }}>
+                            Overall trend: {analyzeTrends.data.trend}
+                          </ThemedText>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                  
+                  {/* AI Analysis */}
+                  <View style={[styles.analysisCard, { backgroundColor: colors.surface }]}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                      <ThemedText style={{ fontSize: 24 }}>🩺</ThemedText>
+                      <ThemedText type="defaultSemiBold">Dr. Sam's Analysis</ThemedText>
+                    </View>
+                    <ThemedText style={{ lineHeight: 24 }}>
+                      {typeof analyzeTrends.data.analysis === 'string' ? analyzeTrends.data.analysis : ''}
+                    </ThemedText>
+                  </View>
+                </>
+              )}
+              
+              {/* Error State */}
+              {analyzeTrends.error && (
+                <View style={[styles.analysisCard, { backgroundColor: colors.surface }]}>
+                  <ThemedText style={{ color: colors.error, textAlign: "center" }}>
+                    Failed to analyze trends. Please try again.
+                  </ThemedText>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -550,5 +712,16 @@ const styles = StyleSheet.create({
   summaryCard: { padding: 20, borderRadius: 12 },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 8 },
   notesSection: { marginTop: 16, paddingTop: 16, borderTopWidth: 1 },
-  calendarToggle: { flexDirection: "row", alignItems: "center", gap: 8, padding: 16, borderRadius: 12, marginBottom: 16 },
+  calendarToggle: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 16, borderRadius: 12 },
+  actionRow: { flexDirection: "row", gap: 12, marginBottom: 16 },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "90%" },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, borderBottomWidth: 1 },
+  modalScroll: { padding: 20 },
+  periodSelector: { flexDirection: "row", gap: 8, marginBottom: 20 },
+  periodOption: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: "center", borderWidth: 1 },
+  analysisCard: { padding: 20, borderRadius: 12, marginBottom: 16 },
+  statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 20 },
+  statCard: { width: "47%", padding: 12, borderRadius: 8, alignItems: "center" },
+  analyzeButton: { paddingVertical: 16, borderRadius: 12, alignItems: "center", marginBottom: 20 },
 });
