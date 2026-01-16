@@ -241,3 +241,6 @@
 - [x] HFL Product Catalog with AI-powered recommendations based on user symptoms/labs (12 products from spreadsheet)
 - [x] Workout & Exercise tracking section (strength, cardio, HIIT, yoga, stretching, sports, walking)
 - [x] Comprehensive Health Report export (includes symptoms, biomarkers, medications, supplements, workouts, nutrition)
+
+## V6 Features - Completed
+- [x] Add product purchase links to HFL website product pages (with UTM tracking)
