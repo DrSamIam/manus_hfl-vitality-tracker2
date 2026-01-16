@@ -2,6 +2,7 @@ import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   biomarkers,
+  foodLogs,
   insights,
   labUploads,
   medications,
@@ -14,6 +15,7 @@ import {
   users,
   type Biomarker,
   type InsertBiomarker,
+  type InsertFoodLog,
   type InsertInsight,
   type InsertLabUpload,
   type InsertMedication,
@@ -453,4 +455,41 @@ export async function deleteMedication(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.delete(medications).where(eq(medications.id, id));
+}
+
+
+// ========== FOOD LOG OPERATIONS ==========
+export async function createFoodLog(data: InsertFoodLog): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(foodLogs).values(data);
+  return result[0].insertId;
+}
+
+export async function getUserFoodLogs(userId: number, date?: string) {
+  const db = await getDb();
+  if (!db) return [];
+  if (date) {
+    return db.select().from(foodLogs).where(and(eq(foodLogs.userId, userId), sql`${foodLogs.logDate} = ${date}`)).orderBy(desc(foodLogs.createdAt));
+  }
+  return db.select().from(foodLogs).where(eq(foodLogs.userId, userId)).orderBy(desc(foodLogs.createdAt)).limit(50);
+}
+
+export async function getDailyNutritionSummary(userId: number, date: string) {
+  const db = await getDb();
+  if (!db) return { totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFat: 0, mealCount: 0 };
+  const logs = await db.select().from(foodLogs).where(and(eq(foodLogs.userId, userId), sql`${foodLogs.logDate} = ${date}`));
+  return {
+    totalCalories: logs.reduce((sum, log) => sum + (log.totalCalories || 0), 0),
+    totalProtein: logs.reduce((sum, log) => sum + parseFloat(String(log.totalProtein || 0)), 0),
+    totalCarbs: logs.reduce((sum, log) => sum + parseFloat(String(log.totalCarbs || 0)), 0),
+    totalFat: logs.reduce((sum, log) => sum + parseFloat(String(log.totalFat || 0)), 0),
+    mealCount: logs.length,
+  };
+}
+
+export async function deleteFoodLog(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(foodLogs).where(eq(foodLogs.id, id));
 }

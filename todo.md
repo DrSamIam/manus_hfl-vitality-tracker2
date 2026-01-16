@@ -189,14 +189,14 @@
 - [x] Dr. Sam AI Chat screen with conversational interface
 - [x] Dr. Sam AI personality with full context injection (symptoms, labs, supplements, HFL products)
 - [x] Medications section with full feature set (drug name, dosage, frequency, time, reason, prescriber)
-- [ ] Diet & Eating Plan section with food tracking
+- [x] Diet & Eating Plan section with food tracking
 - [ ] Account editing (name, email, password)
 
 ### Original App Features to Rebuild
 - [ ] Daily Symptoms Navigation - Today button and calendar date picker with visual indicators
 - [ ] AI Symptom Trend Analysis - "Analyze My Trends" button on symptoms page
 - [ ] Lab Analyzer Links - View previous biomarkers & lab results
-- [ ] Food Scanner / Nutrition page with calorie/macro tracking
+- [x] Food Scanner / Nutrition page with calorie/macro tracking
 - [x] Smart Insights - Cross-references lab results with optimal ranges
 - [ ] Product Catalog Integration - HFL product recommendations based on user data
 - [ ] Supplement UI - Three-dot menu with Edit, Stop Taking, Delete options
@@ -210,7 +210,7 @@
   - Simple Q&A → Groq/Llama (ultra cheap)
 
 ### AI Chat Enhancements
-- [ ] Voice-to-text/mic input for AI chat
+- [x] Voice-to-text/mic input for AI chat
 - [x] Personalized greeting using user's first name
 - [x] Save/share/copy AI conversations
 - [ ] Better AI response quality
@@ -223,6 +223,11 @@
 
 ### Navigation Changes
 - [x] Reorder tabs: Home → Dr. Sam → Symptoms → Labs → Supps → Meds → Insights → Profile (8 tabs)
+
+### V3 Features - In Progress
+- [x] Voice input (speech-to-text) for Dr. Sam AI chat
+- [x] Diet/Nutrition page with food photo scanning and calorie/macro tracking
+- [x] Color-coded calendar for Daily Symptoms (heat map effect)
 
 ### Future Features
 - [ ] Workout & Exercise section

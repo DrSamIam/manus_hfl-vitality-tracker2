@@ -4,11 +4,47 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
+import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
 import * as db from "./db";
 
 export const appRouter = router({
   system: systemRouter,
+  
+  // ========== FILE UPLOAD ==========
+  storage: router({
+    upload: protectedProcedure
+      .input(z.object({
+        filename: z.string(),
+        contentType: z.string(),
+        data: z.string(), // base64 encoded
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const buffer = Buffer.from(input.data, "base64");
+        const key = `uploads/${ctx.user.id}/${Date.now()}-${input.filename}`;
+        const { url } = await storagePut(key, buffer, input.contentType);
+        return { url };
+      }),
+  }),
+  
+  // ========== VOICE TRANSCRIPTION ==========
+  voice: router({
+    transcribe: protectedProcedure
+      .input(z.object({
+        audioUrl: z.string(),
+        language: z.string().optional(),
+        prompt: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await transcribeAudio(input);
+        
+        if ('error' in result) {
+          throw new Error(result.error);
+        }
+        
+        return result;
+      }),
+  }),
   
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
@@ -546,6 +582,127 @@ Only include biomarkers you can clearly identify with their values. If you canno
       }))
       .mutation(async ({ ctx, input }) => {
         await db.updateNotificationSettings(ctx.user.id, input);
+        return { success: true };
+      }),
+  }),
+
+  // ========== FOOD LOGS (Nutrition) ==========
+  food: router({
+    list: protectedProcedure
+      .input(z.object({ date: z.string().optional() }))
+      .query(async ({ ctx, input }) => {
+        return db.getUserFoodLogs(ctx.user.id, input.date);
+      }),
+    
+    dailySummary: protectedProcedure
+      .input(z.object({ date: z.string() }))
+      .query(async ({ ctx, input }) => {
+        return db.getDailyNutritionSummary(ctx.user.id, input.date);
+      }),
+    
+    create: protectedProcedure
+      .input(z.object({
+        logDate: z.string(),
+        mealType: z.enum(["breakfast", "lunch", "dinner", "snack"]),
+        imageUrl: z.string().optional(),
+        totalCalories: z.number(),
+        totalProtein: z.number(),
+        totalCarbs: z.number(),
+        totalFat: z.number(),
+        healthScore: z.number().min(1).max(10).optional(),
+        foods: z.array(z.object({
+          name: z.string(),
+          portion: z.string(),
+          calories: z.number(),
+          protein: z.number(),
+          carbs: z.number(),
+          fat: z.number(),
+        })).optional(),
+        suggestions: z.array(z.string()).optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await db.createFoodLog({
+          userId: ctx.user.id,
+          logDate: new Date(input.logDate),
+          mealType: input.mealType,
+          imageUrl: input.imageUrl,
+          totalCalories: input.totalCalories,
+          totalProtein: String(input.totalProtein),
+          totalCarbs: String(input.totalCarbs),
+          totalFat: String(input.totalFat),
+          healthScore: input.healthScore,
+          foods: input.foods,
+          suggestions: input.suggestions,
+          notes: input.notes,
+        });
+        return { id };
+      }),
+    
+    analyze: protectedProcedure
+      .input(z.object({
+        imageUrl: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        // Use AI to analyze the food image
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image_url",
+                  image_url: { url: input.imageUrl },
+                },
+                {
+                  type: "text",
+                  text: `Analyze this food image and provide detailed nutrition information.
+
+Respond in JSON format:
+{
+  "foods": [
+    {
+      "name": "Food item name",
+      "portion": "Estimated portion size",
+      "calories": number,
+      "protein": number (grams),
+      "carbs": number (grams),
+      "fat": number (grams)
+    }
+  ],
+  "totalCalories": number,
+  "totalProtein": number,
+  "totalCarbs": number,
+  "totalFat": number,
+  "healthScore": number (1-10, where 10 is healthiest),
+  "suggestions": ["Array of suggestions to make this meal healthier"]
+}
+
+Be accurate with portion estimates and calorie counts. Consider all visible items in the image.`,
+                },
+              ],
+            },
+          ],
+        });
+        
+        try {
+          // Parse the JSON response
+          const content = 'content' in response ? String(response.content || "") : "";
+          const jsonMatch = content.match(/\{[\s\S]*\}/);
+          if (!jsonMatch) {
+            throw new Error("No JSON found in response");
+          }
+          return JSON.parse(jsonMatch[0]);
+        } catch (e) {
+          console.error("Failed to parse food analysis:", e);
+          throw new Error("Failed to analyze food image");
+        }
+      }),
+    
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteFoodLog(input.id);
         return { success: true };
       }),
   }),

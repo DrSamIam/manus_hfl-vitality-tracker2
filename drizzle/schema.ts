@@ -163,6 +163,31 @@ export const medications = mysqlTable("medications", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+// ========== FOOD LOGS TABLE ==========
+export const foodLogs = mysqlTable("foodLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  logDate: date("logDate").notNull(),
+  mealType: mysqlEnum("mealType", ["breakfast", "lunch", "dinner", "snack"]).notNull(),
+  imageUrl: text("imageUrl"),
+  totalCalories: int("totalCalories").notNull(),
+  totalProtein: decimal("totalProtein", { precision: 6, scale: 1 }).notNull(),
+  totalCarbs: decimal("totalCarbs", { precision: 6, scale: 1 }).notNull(),
+  totalFat: decimal("totalFat", { precision: 6, scale: 1 }).notNull(),
+  healthScore: int("healthScore"), // 1-10 scale
+  foods: json("foods").$type<{
+    name: string;
+    portion: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  }[]>(),
+  suggestions: json("suggestions").$type<string[]>(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 // ========== LAB UPLOADS TABLE ==========
 export const labUploads = mysqlTable("labUploads", {
   id: int("id").autoincrement().primaryKey(),
@@ -204,3 +229,6 @@ export type InsertLabUpload = typeof labUploads.$inferInsert;
 
 export type Medication = typeof medications.$inferSelect;
 export type InsertMedication = typeof medications.$inferInsert;
+
+export type FoodLog = typeof foodLogs.$inferSelect;
+export type InsertFoodLog = typeof foodLogs.$inferInsert;

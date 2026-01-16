@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { VoiceInput } from "@/components/voice-input";
 import { Colors } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -321,6 +322,11 @@ How can I help you today?`;
             },
           ]}
         >
+          <VoiceInput
+            onTranscription={(text) => setInputText((prev) => prev ? `${prev} ${text}` : text)}
+            onError={(error) => Alert.alert("Voice Error", error)}
+            disabled={isLoading}
+          />
           <TextInput
             style={[
               styles.input,

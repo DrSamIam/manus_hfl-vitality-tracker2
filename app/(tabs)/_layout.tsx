@@ -50,6 +50,14 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="heart.text.square.fill" color={color} />,
         }}
       />
+      {/* Diet / Nutrition */}
+      <Tabs.Screen
+        name="nutrition"
+        options={{
+          title: "Diet",
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="fork.knife" color={color} />,
+        }}
+      />
       {/* Biomarkers / Labs */}
       <Tabs.Screen
         name="biomarkers"

@@ -36,6 +36,15 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December"
 ];
 
+// Heat map colors based on average score (1-10)
+const HEAT_MAP_COLORS = {
+  green: "#22C55E",    // 8-10: Excellent
+  yellow: "#EAB308",   // 6-7: Good
+  orange: "#F97316",   // 4-5: Moderate
+  red: "#EF4444",      // 1-3: Poor
+  none: "transparent", // No data
+};
+
 export function SymptomCalendar({ symptoms, cycles, cycleTrackingEnabled, onDayPress }: SymptomCalendarProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
@@ -58,7 +67,6 @@ export function SymptomCalendar({ symptoms, cycles, cycleTrackingEnabled, onDayP
   const getCyclePhaseForDate = (date: Date): string | null => {
     if (!cycleTrackingEnabled || !cycles || cycles.length === 0) return null;
 
-    // Find the most recent cycle start before this date
     const sortedCycles = [...cycles].sort(
       (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
     );
@@ -70,7 +78,7 @@ export function SymptomCalendar({ symptoms, cycles, cycleTrackingEnabled, onDayP
           (date.getTime() - cycleStart.getTime()) / (1000 * 60 * 60 * 24)
         ) + 1;
         
-        if (daysSinceStart <= 28) { // Assume 28-day cycle
+        if (daysSinceStart <= 28) {
           return getCurrentPhase(daysSinceStart, 28, 5);
         }
         break;
@@ -91,17 +99,14 @@ export function SymptomCalendar({ symptoms, cycles, cycleTrackingEnabled, onDayP
 
     const days: Array<{ date: Date | null; isCurrentMonth: boolean }> = [];
 
-    // Add empty cells for days before the first of the month
     for (let i = 0; i < startingDayOfWeek; i++) {
       days.push({ date: null, isCurrentMonth: false });
     }
 
-    // Add days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       days.push({ date: new Date(year, month, day), isCurrentMonth: true });
     }
 
-    // Add empty cells to complete the last week
     const remainingCells = 7 - (days.length % 7);
     if (remainingCells < 7) {
       for (let i = 0; i < remainingCells; i++) {
@@ -139,12 +144,35 @@ export function SymptomCalendar({ symptoms, cycles, cycleTrackingEnabled, onDayP
     return colors.error;
   };
 
+  // Calculate average score from all metrics
   const getAverageScore = (log: SymptomLog): number => {
-    const scores = [log.energy, log.mood, log.sleep, log.mentalClarity].filter(
-      (s): s is number => s !== null
-    );
+    const scores = [
+      log.energy,
+      log.mood,
+      log.sleep,
+      log.mentalClarity,
+      log.libido,
+      log.performanceStamina
+    ].filter((s): s is number => s !== null);
     if (scores.length === 0) return 0;
     return scores.reduce((a, b) => a + b, 0) / scores.length;
+  };
+
+  // Get heat map color based on average score
+  const getHeatMapColor = (avgScore: number): string => {
+    if (avgScore >= 8) return HEAT_MAP_COLORS.green;
+    if (avgScore >= 6) return HEAT_MAP_COLORS.yellow;
+    if (avgScore >= 4) return HEAT_MAP_COLORS.orange;
+    if (avgScore > 0) return HEAT_MAP_COLORS.red;
+    return HEAT_MAP_COLORS.none;
+  };
+
+  // Get heat map opacity based on score intensity
+  const getHeatMapOpacity = (avgScore: number): number => {
+    if (avgScore === 0) return 0;
+    // Scale opacity from 0.3 to 0.9 based on how far from neutral (5) the score is
+    const intensity = Math.abs(avgScore - 5) / 5;
+    return 0.4 + (intensity * 0.5);
   };
 
   const today = new Date();
@@ -176,7 +204,7 @@ export function SymptomCalendar({ symptoms, cycles, cycleTrackingEnabled, onDayP
         ))}
       </View>
 
-      {/* Calendar grid */}
+      {/* Calendar grid with heat map */}
       <View style={styles.calendarGrid}>
         {calendarData.map((item, index) => {
           if (!item.date) {
@@ -188,17 +216,34 @@ export function SymptomCalendar({ symptoms, cycles, cycleTrackingEnabled, onDayP
           const isToday = item.date.getTime() === today.getTime();
           const cyclePhase = getCyclePhaseForDate(item.date);
           const avgScore = log ? getAverageScore(log) : 0;
+          const heatColor = getHeatMapColor(avgScore);
+          const heatOpacity = getHeatMapOpacity(avgScore);
+          const isFuture = item.date > today;
 
           return (
             <Pressable
               key={dateStr}
               style={[
                 styles.dayCell,
-                isToday && { borderColor: colors.tint, borderWidth: 2 },
+                isToday && styles.todayCell,
               ]}
-              onPress={() => handleDayPress(item.date!)}
+              onPress={() => !isFuture && handleDayPress(item.date!)}
+              disabled={isFuture}
             >
-              {/* Cycle phase indicator */}
+              {/* Heat map background */}
+              {log && (
+                <View
+                  style={[
+                    styles.heatMapBackground,
+                    {
+                      backgroundColor: heatColor,
+                      opacity: heatOpacity,
+                    },
+                  ]}
+                />
+              )}
+
+              {/* Cycle phase indicator (top bar) */}
               {cyclePhase && (
                 <View
                   style={[
@@ -213,38 +258,49 @@ export function SymptomCalendar({ symptoms, cycles, cycleTrackingEnabled, onDayP
                 style={[
                   styles.dayNumber,
                   isToday && { color: colors.tint, fontWeight: "bold" },
+                  isFuture && { color: colors.textSecondary, opacity: 0.5 },
+                  log && avgScore >= 6 && { color: "#FFFFFF", fontWeight: "600" },
                 ]}
               >
                 {item.date.getDate()}
               </ThemedText>
 
-              {/* Log indicator */}
+              {/* Score badge for logged days */}
               {log && (
-                <View
-                  style={[
-                    styles.logIndicator,
-                    { backgroundColor: getScoreColor(avgScore) },
-                  ]}
-                />
+                <View style={styles.scoreBadge}>
+                  <ThemedText style={[styles.scoreText, avgScore >= 6 && { color: "#FFFFFF" }]}>
+                    {avgScore.toFixed(1)}
+                  </ThemedText>
+                </View>
               )}
+
+              {/* Today indicator ring */}
+              {isToday && <View style={[styles.todayRing, { borderColor: colors.tint }]} />}
             </Pressable>
           );
         })}
       </View>
 
-      {/* Legend */}
+      {/* Heat Map Legend */}
       <View style={styles.legend}>
+        <ThemedText style={{ fontSize: 11, color: colors.textSecondary, marginRight: 8 }}>
+          Daily Score:
+        </ThemedText>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: colors.success }]} />
-          <ThemedText style={{ fontSize: 10, color: colors.textSecondary }}>Good (7+)</ThemedText>
+          <View style={[styles.legendSquare, { backgroundColor: HEAT_MAP_COLORS.red }]} />
+          <ThemedText style={{ fontSize: 10, color: colors.textSecondary }}>1-3</ThemedText>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: colors.warning }]} />
-          <ThemedText style={{ fontSize: 10, color: colors.textSecondary }}>Moderate (4-6)</ThemedText>
+          <View style={[styles.legendSquare, { backgroundColor: HEAT_MAP_COLORS.orange }]} />
+          <ThemedText style={{ fontSize: 10, color: colors.textSecondary }}>4-5</ThemedText>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: colors.error }]} />
-          <ThemedText style={{ fontSize: 10, color: colors.textSecondary }}>Low (1-3)</ThemedText>
+          <View style={[styles.legendSquare, { backgroundColor: HEAT_MAP_COLORS.yellow }]} />
+          <ThemedText style={{ fontSize: 10, color: colors.textSecondary }}>6-7</ThemedText>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendSquare, { backgroundColor: HEAT_MAP_COLORS.green }]} />
+          <ThemedText style={{ fontSize: 10, color: colors.textSecondary }}>8-10</ThemedText>
         </View>
       </View>
 
@@ -291,6 +347,14 @@ export function SymptomCalendar({ symptoms, cycles, cycleTrackingEnabled, onDayP
 
             {selectedLog && (
               <ScrollView style={styles.modalBody}>
+                {/* Overall Score */}
+                <View style={[styles.overallScore, { backgroundColor: getHeatMapColor(getAverageScore(selectedLog)) }]}>
+                  <ThemedText style={styles.overallScoreLabel}>Daily Average</ThemedText>
+                  <ThemedText style={styles.overallScoreValue}>
+                    {getAverageScore(selectedLog).toFixed(1)}/10
+                  </ThemedText>
+                </View>
+
                 <View style={styles.scoreGrid}>
                   <View style={styles.scoreItem}>
                     <ThemedText style={{ fontSize: 24 }}>⚡</ThemedText>
@@ -391,33 +455,61 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     position: "relative",
     borderRadius: 8,
+    overflow: "hidden",
   },
-  dayNumber: {
-    fontSize: 14,
+  todayCell: {
+    // Additional styling for today
   },
-  cycleIndicator: {
+  heatMapBackground: {
     position: "absolute",
     top: 2,
     left: 2,
     right: 2,
+    bottom: 2,
+    borderRadius: 6,
+  },
+  dayNumber: {
+    fontSize: 14,
+    zIndex: 1,
+  },
+  cycleIndicator: {
+    position: "absolute",
+    top: 2,
+    left: 4,
+    right: 4,
     height: 3,
     borderRadius: 2,
+    zIndex: 2,
   },
-  logIndicator: {
+  scoreBadge: {
     position: "absolute",
-    bottom: 4,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    bottom: 2,
+    zIndex: 1,
+  },
+  scoreText: {
+    fontSize: 9,
+    fontWeight: "600",
+  },
+  todayRing: {
+    position: "absolute",
+    top: 1,
+    left: 1,
+    right: 1,
+    bottom: 1,
+    borderRadius: 7,
+    borderWidth: 2,
+    zIndex: 3,
   },
   legend: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: 16,
+    alignItems: "center",
+    gap: 12,
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
+    flexWrap: "wrap",
   },
   legendItem: {
     flexDirection: "row",
@@ -428,6 +520,11 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  legendSquare: {
+    width: 12,
+    height: 12,
+    borderRadius: 3,
   },
   modalOverlay: {
     flex: 1,
@@ -450,10 +547,27 @@ const styles = StyleSheet.create({
   modalBody: {
     padding: 20,
   },
+  overallScore: {
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  overallScoreLabel: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "500",
+    marginBottom: 4,
+  },
+  overallScoreValue: {
+    color: "#FFFFFF",
+    fontSize: 32,
+    fontWeight: "bold",
+  },
   scoreGrid: {
     flexDirection: "row",
     justifyContent: "space-around",
-    marginBottom: 20,
+    marginBottom: 16,
   },
   scoreItem: {
     alignItems: "center",
