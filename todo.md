@@ -253,3 +253,11 @@
 - [x] Enhance workouts screen with template browser and filtering
 - [x] Add guided workout mode with rest timers and set tracking
 - [x] Integrate Dr. Sam AI for smart workout recommendations based on symptoms/energy/sleep
+
+## V8 Features - Comprehensive Health Diary - Completed
+- [x] Medical History (conditions, surgeries, allergies, family history, hospitalizations, injuries)
+- [x] Body Measurements (weight, body fat, waist, hips, chest, arms, thighs, neck with change tracking)
+- [x] Progress Photos (front, side, back with timeline and gallery view)
+- [x] Hydration Tracking (daily water intake with goal, quick-add buttons, history)
+- [x] Sleep Logs (bedtime, wake time, duration, quality rating, weekly stats)
+- [x] Exercise Personal Records (PRs) - API ready

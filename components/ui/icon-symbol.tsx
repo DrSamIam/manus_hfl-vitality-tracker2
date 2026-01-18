@@ -46,6 +46,13 @@ const MAPPING = {
   "cross.case.fill": "local-pharmacy",
   "bag.fill": "shopping-bag",
   "cart.fill": "shopping-cart",
+  "drop.fill": "water-drop",
+  "moon.fill": "bedtime",
+  "camera.fill": "photo-camera",
+  "figure.walk": "directions-walk",
+  "ruler": "straighten",
+  "waveform.path.ecg": "monitor-heart",
+  "cross.fill": "local-hospital",
 } as IconMapping;
 
 /**

@@ -90,6 +90,46 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="cross.case.fill" color={color} />,
         }}
       />
+      {/* Hydration */}
+      <Tabs.Screen
+        name="hydration"
+        options={{
+          title: "Water",
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="drop.fill" color={color} />,
+        }}
+      />
+      {/* Sleep */}
+      <Tabs.Screen
+        name="sleep"
+        options={{
+          title: "Sleep",
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="moon.fill" color={color} />,
+        }}
+      />
+      {/* Body Measurements */}
+      <Tabs.Screen
+        name="body"
+        options={{
+          title: "Body",
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="ruler" color={color} />,
+        }}
+      />
+      {/* Progress Photos */}
+      <Tabs.Screen
+        name="photos"
+        options={{
+          title: "Photos",
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="camera.fill" color={color} />,
+        }}
+      />
+      {/* Medical History */}
+      <Tabs.Screen
+        name="medical-history"
+        options={{
+          title: "Medical",
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="cross.fill" color={color} />,
+        }}
+      />
       {/* HFL Products */}
       <Tabs.Screen
         name="products"
