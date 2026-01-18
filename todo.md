@@ -261,3 +261,24 @@
 - [x] Hydration Tracking (daily water intake with goal, quick-add buttons, history)
 - [x] Sleep Logs (bedtime, wake time, duration, quality rating, weekly stats)
 - [x] Exercise Personal Records (PRs) - API ready
+
+
+## Web Version Build - In Progress
+- [ ] Set up Next.js structure in /web folder
+- [ ] Create landing page and dashboard layout
+- [ ] Build Dashboard home page
+- [ ] Build Dr. Sam AI Chat page
+- [ ] Build Symptoms page
+- [ ] Build Diet/Nutrition page
+- [ ] Build Workouts page
+- [ ] Build Labs/Biomarkers page
+- [ ] Build Supplements page
+- [ ] Build Medications page
+- [ ] Build Products/Shop page
+- [ ] Build Medical History page
+- [ ] Build Body Measurements page
+- [ ] Build Progress Photos page
+- [ ] Build Hydration page
+- [ ] Build Sleep page
+- [ ] Build Insights page
+- [ ] Build Profile page
