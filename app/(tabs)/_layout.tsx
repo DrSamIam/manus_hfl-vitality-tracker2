@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import React from "react";
+import { Platform, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HapticTab } from "@/components/haptic-tab";
@@ -10,20 +11,38 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isWeb = Platform.OS === "web";
+  const isWideScreen = width >= 768;
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
-        headerShown: false,
+        headerShown: isWeb && isWideScreen,
+        headerStyle: isWeb ? { backgroundColor: Colors[colorScheme ?? "light"].background } : undefined,
+        headerTitleStyle: isWeb ? { fontWeight: "600" } : undefined,
         tabBarButton: HapticTab,
         tabBarStyle: {
-          paddingBottom: insets.bottom,
-          height: 49 + insets.bottom,
+          paddingBottom: isWeb ? 8 : insets.bottom,
+          height: isWeb ? 60 : 49 + insets.bottom,
+          ...(isWeb && isWideScreen ? {
+            position: "absolute" as const,
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 80,
+            height: "100%",
+            flexDirection: "column" as const,
+            borderRightWidth: 1,
+            borderRightColor: Colors[colorScheme ?? "light"].icon + "30",
+            paddingTop: 20,
+          } : {}),
         },
         tabBarLabelStyle: {
-          fontSize: 9,
+          fontSize: isWeb && isWideScreen ? 10 : 9,
         },
+        sceneStyle: isWeb && isWideScreen ? { marginLeft: 80 } : undefined,
       }}
     >
       {/* Dashboard / Home */}

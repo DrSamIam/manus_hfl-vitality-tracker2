@@ -66,6 +66,12 @@ const config: ExpoConfig = {
   web: {
     output: "static",
     favicon: "./assets/images/favicon.png",
+    bundler: "metro",
+    name: "HFL Vitality Tracker",
+    shortName: "Vitality",
+    description: "Track your health, fitness, and longevity journey",
+    backgroundColor: "#ffffff",
+    themeColor: "#0D9488",
   },
   plugins: [
     "expo-router",
