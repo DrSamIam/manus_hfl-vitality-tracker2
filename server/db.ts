@@ -2,36 +2,54 @@ import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   biomarkers,
+  bodyMeasurements,
+  exercisePRs,
   foodLogs,
+  hydrationLogs,
   insights,
   labUploads,
   medications,
+  medicalHistory,
   menstrualCycles,
   notificationSettings,
   periodSymptoms,
+  progressPhotos,
+  sleepLogs,
   supplementLogs,
   supplements,
   symptoms,
   users,
   workouts,
   type Biomarker,
+  type BodyMeasurement,
+  type ExercisePR,
+  type HydrationLog,
   type InsertBiomarker,
+  type InsertBodyMeasurement,
+  type InsertExercisePR,
   type InsertFoodLog,
+  type InsertHydrationLog,
   type InsertInsight,
   type InsertLabUpload,
+  type InsertMedicalHistoryEntry,
   type InsertMedication,
   type InsertMenstrualCycle,
   type InsertNotificationSettings,
   type InsertPeriodSymptom,
+  type InsertProgressPhoto,
+  type InsertSleepLog,
   type InsertSupplement,
   type InsertSupplementLog,
   type InsertSymptom,
   type InsertUser,
   type InsertWorkout,
+  type MedicalHistoryEntry,
   type Medication,
   type MenstrualCycle,
   type NotificationSettings,
   type PeriodSymptom,
+  type ProgressPhoto,
+  type SleepLog,
   type Supplement,
   type SupplementLog,
   type Symptom,
@@ -555,4 +573,167 @@ export async function getWeeklyWorkoutStats(userId: number) {
     totalMinutes: weekWorkouts.reduce((sum, w) => sum + (w.durationMinutes || 0), 0),
     totalCalories: weekWorkouts.reduce((sum, w) => sum + (w.caloriesBurned || 0), 0),
   };
+}
+
+
+// ========== MEDICAL HISTORY OPERATIONS ==========
+export async function getUserMedicalHistory(userId: number, entryType?: string) {
+  const db = await getDb();
+  if (!db) return [];
+  if (entryType) {
+    return db.select().from(medicalHistory).where(and(eq(medicalHistory.userId, userId), eq(medicalHistory.entryType, entryType as any))).orderBy(desc(medicalHistory.createdAt));
+  }
+  return db.select().from(medicalHistory).where(eq(medicalHistory.userId, userId)).orderBy(desc(medicalHistory.createdAt));
+}
+
+export async function createMedicalHistoryEntry(data: InsertMedicalHistoryEntry): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(medicalHistory).values(data);
+  return result[0].insertId;
+}
+
+export async function updateMedicalHistoryEntry(id: number, data: Partial<InsertMedicalHistoryEntry>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(medicalHistory).set(data).where(eq(medicalHistory.id, id));
+}
+
+export async function deleteMedicalHistoryEntry(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(medicalHistory).where(eq(medicalHistory.id, id));
+}
+
+// ========== BODY MEASUREMENTS OPERATIONS ==========
+export async function getUserBodyMeasurements(userId: number, limit = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(bodyMeasurements).where(eq(bodyMeasurements.userId, userId)).orderBy(desc(bodyMeasurements.measureDate)).limit(limit);
+}
+
+export async function getLatestBodyMeasurement(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(bodyMeasurements).where(eq(bodyMeasurements.userId, userId)).orderBy(desc(bodyMeasurements.measureDate)).limit(1);
+  return result[0] || null;
+}
+
+export async function createBodyMeasurement(data: InsertBodyMeasurement): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(bodyMeasurements).values(data);
+  return result[0].insertId;
+}
+
+export async function deleteBodyMeasurement(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(bodyMeasurements).where(eq(bodyMeasurements.id, id));
+}
+
+// ========== PROGRESS PHOTOS OPERATIONS ==========
+export async function getUserProgressPhotos(userId: number, photoType?: string) {
+  const db = await getDb();
+  if (!db) return [];
+  if (photoType) {
+    return db.select().from(progressPhotos).where(and(eq(progressPhotos.userId, userId), eq(progressPhotos.photoType, photoType as any))).orderBy(desc(progressPhotos.photoDate));
+  }
+  return db.select().from(progressPhotos).where(eq(progressPhotos.userId, userId)).orderBy(desc(progressPhotos.photoDate));
+}
+
+export async function createProgressPhoto(data: InsertProgressPhoto): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(progressPhotos).values(data);
+  return result[0].insertId;
+}
+
+export async function deleteProgressPhoto(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(progressPhotos).where(eq(progressPhotos.id, id));
+}
+
+// ========== HYDRATION LOGS OPERATIONS ==========
+export async function getHydrationLog(userId: number, date: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(hydrationLogs).where(and(eq(hydrationLogs.userId, userId), sql`${hydrationLogs.logDate} = ${date}`)).limit(1);
+  return result[0] || null;
+}
+
+export async function getUserHydrationLogs(userId: number, limit = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(hydrationLogs).where(eq(hydrationLogs.userId, userId)).orderBy(desc(hydrationLogs.logDate)).limit(limit);
+}
+
+export async function upsertHydrationLog(data: InsertHydrationLog): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const existing = await getHydrationLog(data.userId, data.logDate as unknown as string);
+  if (existing) {
+    await db.update(hydrationLogs).set(data).where(eq(hydrationLogs.id, existing.id));
+    return existing.id;
+  }
+  const result = await db.insert(hydrationLogs).values(data);
+  return result[0].insertId;
+}
+
+// ========== EXERCISE PERSONAL RECORDS OPERATIONS ==========
+export async function getUserExercisePRs(userId: number, exerciseName?: string) {
+  const db = await getDb();
+  if (!db) return [];
+  if (exerciseName) {
+    return db.select().from(exercisePRs).where(and(eq(exercisePRs.userId, userId), eq(exercisePRs.exerciseName, exerciseName))).orderBy(desc(exercisePRs.achievedDate));
+  }
+  return db.select().from(exercisePRs).where(eq(exercisePRs.userId, userId)).orderBy(desc(exercisePRs.achievedDate));
+}
+
+export async function createExercisePR(data: InsertExercisePR): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(exercisePRs).values(data);
+  return result[0].insertId;
+}
+
+export async function deleteExercisePR(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(exercisePRs).where(eq(exercisePRs.id, id));
+}
+
+// ========== SLEEP LOGS OPERATIONS ==========
+export async function getSleepLog(userId: number, date: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(sleepLogs).where(and(eq(sleepLogs.userId, userId), sql`${sleepLogs.logDate} = ${date}`)).limit(1);
+  return result[0] || null;
+}
+
+export async function getUserSleepLogs(userId: number, limit = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(sleepLogs).where(eq(sleepLogs.userId, userId)).orderBy(desc(sleepLogs.logDate)).limit(limit);
+}
+
+export async function upsertSleepLog(data: InsertSleepLog): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const existing = await getSleepLog(data.userId, data.logDate as unknown as string);
+  if (existing) {
+    await db.update(sleepLogs).set(data).where(eq(sleepLogs.id, existing.id));
+    return existing.id;
+  }
+  const result = await db.insert(sleepLogs).values(data);
+  return result[0].insertId;
+}
+
+export async function deleteSleepLog(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(sleepLogs).where(eq(sleepLogs.id, id));
 }

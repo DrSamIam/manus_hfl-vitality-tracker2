@@ -233,6 +233,93 @@ export const labUploads = mysqlTable("labUploads", {
   notes: text("notes"),
 });
 
+// ========== MEDICAL HISTORY TABLE ==========
+export const medicalHistory = mysqlTable("medicalHistory", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  entryType: mysqlEnum("entryType", ["condition", "surgery", "allergy", "family_history", "hospitalization", "injury"]).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  diagnosisDate: date("diagnosisDate"),
+  status: mysqlEnum("status", ["active", "resolved", "managed", "ongoing"]),
+  severity: mysqlEnum("severity", ["mild", "moderate", "severe"]),
+  treatedBy: varchar("treatedBy", { length: 255 }),
+  familyMember: varchar("familyMember", { length: 100 }),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+// ========== BODY MEASUREMENTS TABLE ==========
+export const bodyMeasurements = mysqlTable("bodyMeasurements", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  measureDate: date("measureDate").notNull(),
+  weight: decimal("weight", { precision: 5, scale: 1 }),
+  bodyFatPercent: decimal("bodyFatPercent", { precision: 4, scale: 1 }),
+  waist: decimal("waist", { precision: 4, scale: 1 }),
+  hips: decimal("hips", { precision: 4, scale: 1 }),
+  chest: decimal("chest", { precision: 4, scale: 1 }),
+  leftArm: decimal("leftArm", { precision: 4, scale: 1 }),
+  rightArm: decimal("rightArm", { precision: 4, scale: 1 }),
+  leftThigh: decimal("leftThigh", { precision: 4, scale: 1 }),
+  rightThigh: decimal("rightThigh", { precision: 4, scale: 1 }),
+  neck: decimal("neck", { precision: 4, scale: 1 }),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+// ========== PROGRESS PHOTOS TABLE ==========
+export const progressPhotos = mysqlTable("progressPhotos", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  photoDate: date("photoDate").notNull(),
+  photoType: mysqlEnum("photoType", ["front", "side", "back", "other"]).notNull(),
+  imageUrl: text("imageUrl").notNull(),
+  weight: decimal("weight", { precision: 5, scale: 1 }),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+// ========== HYDRATION LOGS TABLE ==========
+export const hydrationLogs = mysqlTable("hydrationLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  logDate: date("logDate").notNull(),
+  waterOz: int("waterOz").notNull(),
+  goal: int("goal").default(64),
+  entries: json("entries").$type<{ time: string; amount: number }[]>(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+// ========== EXERCISE PERSONAL RECORDS TABLE ==========
+export const exercisePRs = mysqlTable("exercisePRs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  exerciseName: varchar("exerciseName", { length: 255 }).notNull(),
+  prType: mysqlEnum("prType", ["weight", "reps", "time", "distance"]).notNull(),
+  value: decimal("value", { precision: 10, scale: 2 }).notNull(),
+  unit: varchar("unit", { length: 20 }).notNull(),
+  achievedDate: date("achievedDate").notNull(),
+  workoutId: int("workoutId"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+// ========== SLEEP LOGS TABLE ==========
+export const sleepLogs = mysqlTable("sleepLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  logDate: date("logDate").notNull(),
+  bedtime: varchar("bedtime", { length: 5 }),
+  wakeTime: varchar("wakeTime", { length: 5 }),
+  durationMinutes: int("durationMinutes"),
+  quality: int("quality"),
+  deepSleepMinutes: int("deepSleepMinutes"),
+  remSleepMinutes: int("remSleepMinutes"),
+  awakenings: int("awakenings"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 // ========== TYPE EXPORTS ==========
 export type Biomarker = typeof biomarkers.$inferSelect;
 export type InsertBiomarker = typeof biomarkers.$inferInsert;
@@ -269,3 +356,21 @@ export type InsertFoodLog = typeof foodLogs.$inferInsert;
 
 export type Workout = typeof workouts.$inferSelect;
 export type InsertWorkout = typeof workouts.$inferInsert;
+
+export type MedicalHistoryEntry = typeof medicalHistory.$inferSelect;
+export type InsertMedicalHistoryEntry = typeof medicalHistory.$inferInsert;
+
+export type BodyMeasurement = typeof bodyMeasurements.$inferSelect;
+export type InsertBodyMeasurement = typeof bodyMeasurements.$inferInsert;
+
+export type ProgressPhoto = typeof progressPhotos.$inferSelect;
+export type InsertProgressPhoto = typeof progressPhotos.$inferInsert;
+
+export type HydrationLog = typeof hydrationLogs.$inferSelect;
+export type InsertHydrationLog = typeof hydrationLogs.$inferInsert;
+
+export type ExercisePR = typeof exercisePRs.$inferSelect;
+export type InsertExercisePR = typeof exercisePRs.$inferInsert;
+
+export type SleepLog = typeof sleepLogs.$inferSelect;
+export type InsertSleepLog = typeof sleepLogs.$inferInsert;

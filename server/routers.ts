@@ -1410,6 +1410,250 @@ Respond in JSON format:
         }
       }),
   }),
+
+  // ========== MEDICAL HISTORY ==========
+  medicalHistory: router({
+    list: protectedProcedure
+      .input(z.object({ entryType: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        return db.getUserMedicalHistory(ctx.user.id, input?.entryType);
+      }),
+    create: protectedProcedure
+      .input(z.object({
+        entryType: z.enum(["condition", "surgery", "allergy", "family_history", "hospitalization", "injury"]),
+        name: z.string(),
+        diagnosisDate: z.string().optional(),
+        status: z.enum(["active", "resolved", "managed", "ongoing"]).optional(),
+        severity: z.enum(["mild", "moderate", "severe"]).optional(),
+        treatedBy: z.string().optional(),
+        familyMember: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await db.createMedicalHistoryEntry({
+          userId: ctx.user.id,
+          ...input,
+          diagnosisDate: input.diagnosisDate ? new Date(input.diagnosisDate) : undefined,
+        });
+        return { id };
+      }),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        status: z.enum(["active", "resolved", "managed", "ongoing"]).optional(),
+        severity: z.enum(["mild", "moderate", "severe"]).optional(),
+        treatedBy: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updateMedicalHistoryEntry(id, data);
+        return { success: true };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteMedicalHistoryEntry(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ========== BODY MEASUREMENTS ==========
+  measurements: router({
+    list: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        return db.getUserBodyMeasurements(ctx.user.id, input?.limit);
+      }),
+    latest: protectedProcedure
+      .query(async ({ ctx }) => {
+        return db.getLatestBodyMeasurement(ctx.user.id);
+      }),
+    create: protectedProcedure
+      .input(z.object({
+        measureDate: z.string(),
+        weight: z.number().optional(),
+        bodyFatPercent: z.number().optional(),
+        waist: z.number().optional(),
+        hips: z.number().optional(),
+        chest: z.number().optional(),
+        leftArm: z.number().optional(),
+        rightArm: z.number().optional(),
+        leftThigh: z.number().optional(),
+        rightThigh: z.number().optional(),
+        neck: z.number().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await db.createBodyMeasurement({
+          userId: ctx.user.id,
+          measureDate: new Date(input.measureDate),
+          weight: input.weight?.toString(),
+          bodyFatPercent: input.bodyFatPercent?.toString(),
+          waist: input.waist?.toString(),
+          hips: input.hips?.toString(),
+          chest: input.chest?.toString(),
+          leftArm: input.leftArm?.toString(),
+          rightArm: input.rightArm?.toString(),
+          leftThigh: input.leftThigh?.toString(),
+          rightThigh: input.rightThigh?.toString(),
+          neck: input.neck?.toString(),
+          notes: input.notes,
+        });
+        return { id };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteBodyMeasurement(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ========== PROGRESS PHOTOS ==========
+  photos: router({
+    list: protectedProcedure
+      .input(z.object({ photoType: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        return db.getUserProgressPhotos(ctx.user.id, input?.photoType);
+      }),
+    create: protectedProcedure
+      .input(z.object({
+        photoDate: z.string(),
+        photoType: z.enum(["front", "side", "back", "other"]),
+        imageUrl: z.string(),
+        weight: z.number().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await db.createProgressPhoto({
+          userId: ctx.user.id,
+          photoDate: new Date(input.photoDate),
+          photoType: input.photoType,
+          imageUrl: input.imageUrl,
+          weight: input.weight?.toString(),
+          notes: input.notes,
+        });
+        return { id };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteProgressPhoto(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ========== HYDRATION ==========
+  hydration: router({
+    today: protectedProcedure
+      .query(async ({ ctx }) => {
+        const today = new Date().toISOString().split("T")[0];
+        return db.getHydrationLog(ctx.user.id, today);
+      }),
+    list: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        return db.getUserHydrationLogs(ctx.user.id, input?.limit);
+      }),
+    log: protectedProcedure
+      .input(z.object({
+        logDate: z.string(),
+        waterOz: z.number(),
+        goal: z.number().optional(),
+        entries: z.array(z.object({ time: z.string(), amount: z.number() })).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await db.upsertHydrationLog({
+          userId: ctx.user.id,
+          logDate: new Date(input.logDate),
+          waterOz: input.waterOz,
+          goal: input.goal,
+          entries: input.entries,
+        });
+        return { id };
+      }),
+  }),
+
+  // ========== EXERCISE PERSONAL RECORDS ==========
+  prs: router({
+    list: protectedProcedure
+      .input(z.object({ exerciseName: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        return db.getUserExercisePRs(ctx.user.id, input?.exerciseName);
+      }),
+    create: protectedProcedure
+      .input(z.object({
+        exerciseName: z.string(),
+        prType: z.enum(["weight", "reps", "time", "distance"]),
+        value: z.number(),
+        unit: z.string(),
+        achievedDate: z.string(),
+        workoutId: z.number().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await db.createExercisePR({
+          userId: ctx.user.id,
+          exerciseName: input.exerciseName,
+          prType: input.prType,
+          value: input.value.toString(),
+          unit: input.unit,
+          achievedDate: new Date(input.achievedDate),
+          workoutId: input.workoutId,
+          notes: input.notes,
+        });
+        return { id };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteExercisePR(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ========== SLEEP LOGS ==========
+  sleep: router({
+    today: protectedProcedure
+      .query(async ({ ctx }) => {
+        const today = new Date().toISOString().split("T")[0];
+        return db.getSleepLog(ctx.user.id, today);
+      }),
+    list: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        return db.getUserSleepLogs(ctx.user.id, input?.limit);
+      }),
+    log: protectedProcedure
+      .input(z.object({
+        logDate: z.string(),
+        bedtime: z.string().optional(),
+        wakeTime: z.string().optional(),
+        durationMinutes: z.number().optional(),
+        quality: z.number().optional(),
+        deepSleepMinutes: z.number().optional(),
+        remSleepMinutes: z.number().optional(),
+        awakenings: z.number().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { logDate, ...rest } = input;
+        const id = await db.upsertSleepLog({
+          userId: ctx.user.id,
+          logDate: new Date(logDate),
+          ...rest,
+        });
+        return { id };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteSleepLog(input.id);
+        return { success: true };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
