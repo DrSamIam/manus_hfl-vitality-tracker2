@@ -282,3 +282,30 @@
 - [ ] Build Sleep page
 - [ ] Build Insights page
 - [ ] Build Profile page
+
+## Web App (Next.js) - Added Jan 18, 2026
+
+### Core Pages
+- [x] Landing page with feature overview
+- [x] Dashboard with health stats overview
+- [x] Dr. Sam AI chat interface
+- [x] Daily symptoms tracking with sliders
+- [x] Diet/nutrition tracking
+- [x] Workouts with templates
+- [x] Labs & biomarkers tracking
+- [x] Supplements tracking
+- [x] Medications tracking
+- [x] Hydration tracking with water drop visualization
+- [x] Sleep tracking with quality ratings
+- [x] Body measurements
+- [x] Progress photos
+- [x] Medical history
+- [x] HFL Products shop with 12 products
+- [x] Health insights with AI recommendations
+- [x] Profile page
+
+### Web App Features
+- [x] Responsive sidebar navigation
+- [x] Teal/green color theme matching mobile
+- [x] All 16 navigation items functional
+- [x] Product recommendations based on health data
