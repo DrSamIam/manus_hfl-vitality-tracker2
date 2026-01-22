@@ -14,6 +14,7 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
+import { useLocalProfile } from "@/hooks/use-local-profile";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { trpc } from "@/lib/trpc";
 
@@ -66,6 +67,7 @@ export default function ProfileSetupScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
   const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const { saveProfile } = useLocalProfile();
 
   const [biologicalSex, setBiologicalSex] = useState<"male" | "female" | "prefer_not_to_say" | null>(null);
   const [age, setAge] = useState("");
@@ -73,6 +75,7 @@ export default function ProfileSetupScreen() {
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [hasRecentLabWork, setHasRecentLabWork] = useState<boolean | null>(null);
   const [cycleTrackingEnabled, setCycleTrackingEnabled] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const updateProfile = trpc.profile.update.useMutation();
 
@@ -107,28 +110,36 @@ export default function ProfileSetupScreen() {
   const handleComplete = async () => {
     if (!biologicalSex || !age) return;
     
-    // Check if user is authenticated
-    if (!isAuthenticated || !user) {
-      setError("Please log in first to complete your profile setup.");
-      return;
-    }
-
+    setSaving(true);
     setError(null);
+    
+    const profileData = {
+      biologicalSex,
+      age: parseInt(age),
+      goals: selectedGoals,
+      currentSymptoms: selectedSymptoms,
+      hasRecentLabWork: hasRecentLabWork ?? false,
+      cycleTrackingEnabled: cycleTrackingEnabled ?? false,
+      onboardingCompleted: true,
+    };
+
     try {
-      await updateProfile.mutateAsync({
-        biologicalSex,
-        age: parseInt(age),
-        goals: selectedGoals,
-        currentSymptoms: selectedSymptoms,
-        hasRecentLabWork: hasRecentLabWork ?? false,
-        cycleTrackingEnabled: cycleTrackingEnabled ?? false,
-        onboardingCompleted: true,
-      });
+      // If authenticated, save to server
+      if (isAuthenticated && user) {
+        await updateProfile.mutateAsync(profileData);
+      }
+      
+      // Always save locally for offline access and guest mode
+      await saveProfile(profileData);
 
       router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Failed to update profile:", err);
-      setError(err?.message || "Failed to save profile. Please try again.");
+      // Even if server save fails, save locally and continue
+      await saveProfile(profileData);
+      router.replace("/(tabs)");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -337,11 +348,14 @@ export default function ProfileSetupScreen() {
           </View>
         )}
 
-        {/* Cycle Tracking Question (Female only) */}
+        {/* Cycle Tracking (Female only) */}
         {biologicalSex === "female" && (
           <View style={styles.section}>
             <ThemedText type="subtitle" style={styles.sectionTitle}>
-              Would you like to track your menstrual cycle?
+              Track your menstrual cycle?
+            </ThemedText>
+            <ThemedText style={[styles.sectionDescription, { color: colors.textSecondary }]}>
+              Get cycle-aware insights and testing recommendations
             </ThemedText>
             <View style={styles.optionsRow}>
               <Pressable
@@ -390,56 +404,37 @@ export default function ProfileSetupScreen() {
 
         {/* Error Message */}
         {error && (
-          <View style={[styles.errorContainer, { backgroundColor: colors.error + "20" }]}>
-            <ThemedText style={{ color: colors.error, textAlign: "center" }}>
-              {error}
-            </ThemedText>
-          </View>
-        )}
-
-        {/* Login Required Notice */}
-        {!isAuthenticated && !authLoading && (
-          <View style={[styles.loginNotice, { backgroundColor: colors.warning + "20" }]}>
-            <ThemedText style={{ color: colors.warning, textAlign: "center", marginBottom: 12 }}>
-              Please log in to save your profile
-            </ThemedText>
-            <Pressable
-              onPress={() => router.push("/(tabs)" as any)}
-              style={[styles.loginButton, { backgroundColor: colors.tint }]}
-            >
-              <ThemedText style={{ color: "#FFFFFF", fontWeight: "600" }}>Go to Login</ThemedText>
-            </Pressable>
+          <View style={[styles.errorBox, { backgroundColor: colors.error + "20" }]}>
+            <ThemedText style={{ color: colors.error }}>{error}</ThemedText>
           </View>
         )}
 
         {/* Complete Button */}
-        <Pressable
-          onPress={handleComplete}
-          disabled={!canComplete || updateProfile.isPending || !isAuthenticated}
-          style={({ pressed }) => [
-            styles.completeButton,
-            {
-              backgroundColor: canComplete && isAuthenticated ? colors.tint : colors.surface,
-              borderColor: colors.border,
-            },
-            pressed && canComplete && isAuthenticated && styles.buttonPressed,
-            (!canComplete || updateProfile.isPending || !isAuthenticated) && styles.buttonDisabled,
-          ]}
-        >
-          {updateProfile.isPending ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <ThemedText
-              type="defaultSemiBold"
-              style={[
-                styles.completeButtonText,
-                { color: canComplete && isAuthenticated ? "#FFFFFF" : colors.textSecondary },
-              ]}
-            >
-              Complete Setup
-            </ThemedText>
-          )}
-        </Pressable>
+        <View style={styles.footer}>
+          <Pressable
+            onPress={handleComplete}
+            disabled={!canComplete || saving}
+            style={({ pressed }) => [
+              styles.button,
+              {
+                backgroundColor: canComplete ? colors.tint : colors.surface,
+                opacity: saving ? 0.6 : 1,
+              },
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            {saving ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <ThemedText
+                type="defaultSemiBold"
+                style={[styles.buttonText, { color: canComplete ? "#FFFFFF" : colors.textSecondary }]}
+              >
+                Complete Setup
+              </ThemedText>
+            )}
+          </Pressable>
+        </View>
       </ScrollView>
     </ThemedView>
   );
@@ -456,26 +451,29 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   title: {
-    marginBottom: 32,
+    marginBottom: 24,
   },
   section: {
-    marginBottom: 32,
+    marginBottom: 24,
   },
   sectionTitle: {
-    marginBottom: 16,
+    marginBottom: 8,
+  },
+  sectionDescription: {
+    fontSize: 14,
+    marginBottom: 12,
   },
   optionsRow: {
     flexDirection: "row",
-    gap: 12,
     flexWrap: "wrap",
+    gap: 8,
   },
   optionButton: {
-    flex: 1,
-    minWidth: 100,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
+    minWidth: 80,
     alignItems: "center",
   },
   optionPressed: {
@@ -483,7 +481,6 @@ const styles = StyleSheet.create({
   },
   optionText: {
     fontSize: 14,
-    fontWeight: "500",
   },
   input: {
     paddingVertical: 12,
@@ -493,7 +490,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   checkboxList: {
-    gap: 12,
+    gap: 8,
   },
   checkbox: {
     flexDirection: "row",
@@ -517,41 +514,27 @@ const styles = StyleSheet.create({
   checkboxLabel: {
     flex: 1,
     fontSize: 14,
-    lineHeight: 20,
   },
-  completeButton: {
+  errorBox: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  footer: {
+    marginTop: 16,
+  },
+  button: {
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 12,
     alignItems: "center",
     minHeight: 56,
     justifyContent: "center",
-    marginTop: 16,
-    borderWidth: 1,
   },
   buttonPressed: {
     opacity: 0.8,
   },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  completeButtonText: {
+  buttonText: {
     fontSize: 16,
-  },
-  errorContainer: {
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  loginNotice: {
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-    alignItems: "center",
-  },
-  loginButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
   },
 });

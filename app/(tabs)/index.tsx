@@ -14,6 +14,7 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
+import { useLocalProfile } from "@/hooks/use-local-profile";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { trpc } from "@/lib/trpc";
 
@@ -23,12 +24,18 @@ export default function DashboardScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
   const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const { profile: localProfile, loading: localProfileLoading } = useLocalProfile();
 
   const [refreshing, setRefreshing] = useState(false);
 
-  const { data: profile, refetch: refetchProfile } = trpc.profile.get.useQuery(undefined, {
+  // Use server profile if authenticated, otherwise use local profile
+  const { data: serverProfile, refetch: refetchProfile } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
   });
+  
+  const profile = isAuthenticated ? serverProfile : localProfile;
+  const profileLoading = isAuthenticated ? !serverProfile : localProfileLoading;
+
   const { data: streak } = trpc.symptoms.streak.useQuery(undefined, {
     enabled: isAuthenticated,
   });
@@ -46,19 +53,31 @@ export default function DashboardScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refetchProfile(), refetchSymptom()]);
+    if (isAuthenticated) {
+      await Promise.all([refetchProfile(), refetchSymptom()]);
+    }
     setRefreshing(false);
   };
 
-  // Redirect to onboarding if not completed
+  // Redirect to onboarding if profile not completed (check both server and local)
   useEffect(() => {
-    if (!authLoading && isAuthenticated && profile && !profile.onboardingCompleted) {
+    if (authLoading || localProfileLoading) return;
+    
+    // If authenticated, check server profile
+    if (isAuthenticated && serverProfile && !serverProfile.onboardingCompleted) {
       router.replace("/onboarding/welcome" as any);
+      return;
     }
-  }, [authLoading, isAuthenticated, profile]);
+    
+    // If not authenticated, check local profile
+    if (!isAuthenticated && localProfile && !localProfile.onboardingCompleted) {
+      router.replace("/onboarding/welcome" as any);
+      return;
+    }
+  }, [authLoading, localProfileLoading, isAuthenticated, serverProfile, localProfile]);
 
-  // Show login prompt if not authenticated
-  if (!authLoading && !isAuthenticated) {
+  // Show welcome screen if no profile exists at all
+  if (!authLoading && !localProfileLoading && !isAuthenticated && (!localProfile || !localProfile.onboardingCompleted)) {
     return (
       <ThemedView style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>
         <View style={styles.centered}>
@@ -85,7 +104,7 @@ export default function DashboardScreen() {
     );
   }
 
-  if (authLoading || !profile) {
+  if (authLoading || localProfileLoading || profileLoading) {
     return (
       <ThemedView style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color={colors.tint} />
@@ -94,14 +113,14 @@ export default function DashboardScreen() {
   }
 
   const hasLoggedToday = !!todaysSymptom;
-  const isFemale = profile.biologicalSex === "female";
-  const showCycleTracking = isFemale && profile.cycleTrackingEnabled;
+  const isFemale = profile?.biologicalSex === "female";
+  const showCycleTracking = isFemale && profile?.cycleTrackingEnabled;
 
   // Get primary biomarker label based on sex
   const primaryBiomarkerLabel =
-    profile.biologicalSex === "male"
+    profile?.biologicalSex === "male"
       ? "Testosterone"
-      : profile.biologicalSex === "female"
+      : profile?.biologicalSex === "female"
         ? "Estradiol"
         : "Primary Biomarker";
 
@@ -128,6 +147,13 @@ export default function DashboardScreen() {
           <ThemedText style={[styles.greeting, { color: colors.textSecondary }]}>
             Welcome back{user?.name ? `, ${user.name}` : ""}!
           </ThemedText>
+          {!isAuthenticated && (
+            <View style={[styles.guestBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <ThemedText style={{ color: colors.textSecondary, fontSize: 13 }}>
+                👤 Guest Mode - Your data is stored locally
+              </ThemedText>
+            </View>
+          )}
         </View>
 
         {/* Quick Stats Cards */}
@@ -294,31 +320,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 4,
   },
+  guestBanner: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+  },
   welcomeTitle: {
     textAlign: "center",
     marginBottom: 16,
   },
   welcomeSubtitle: {
-    textAlign: "center",
     fontSize: 16,
-    lineHeight: 24,
+    textAlign: "center",
     marginBottom: 32,
-    paddingHorizontal: 24,
+    lineHeight: 24,
   },
   loginButton: {
     paddingVertical: 16,
     paddingHorizontal: 48,
     borderRadius: 12,
     minHeight: 56,
-    alignItems: "center",
     justifyContent: "center",
-  },
-  buttonPressed: {
-    opacity: 0.8,
+    alignItems: "center",
   },
   loginButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
+  },
+  buttonPressed: {
+    opacity: 0.8,
   },
   statsGrid: {
     flexDirection: "row",
@@ -327,11 +359,10 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   statCard: {
-    width: "48%",
-    flexGrow: 1,
+    flex: 1,
+    minWidth: "45%",
     padding: 16,
     borderRadius: 12,
-    minHeight: 100,
   },
   statLabel: {
     fontSize: 12,
@@ -354,13 +385,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionTitle: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   actionButton: {
     padding: 20,
     borderRadius: 12,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
   },
@@ -380,9 +411,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   supplementsCard: {
+    marginTop: 12,
     padding: 16,
     borderRadius: 12,
-    marginTop: 12,
   },
   supplementsTitle: {
     marginBottom: 12,
@@ -403,15 +434,15 @@ const styles = StyleSheet.create({
   },
   miniCheckbox: {
     width: 32,
-    height: 32,
-    borderRadius: 6,
+    height: 24,
+    borderRadius: 4,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   viewAllLink: {
-    fontSize: 14,
     marginTop: 8,
+    fontSize: 14,
   },
   emptyState: {
     padding: 32,
@@ -419,7 +450,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   emptyStateText: {
-    textAlign: "center",
     fontSize: 14,
+    textAlign: "center",
   },
 });
