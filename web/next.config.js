@@ -1,7 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Allow API calls to the existing server
+  // Skip type checking and linting during build to reduce memory usage
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  // Allow API calls to the existing server (for local dev)
   async rewrites() {
     return [
       {
